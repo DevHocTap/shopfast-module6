@@ -35,6 +35,25 @@ export const envSchema = z.object({
   /** Password of the seeded demo accounts. Required only when running the seed script. */
   SEED_DEMO_PASSWORD: z.string().min(8).optional(),
 
+  /** Public address of the web app, used for links inside emails. */
+  APP_PUBLIC_URL: z.string().url().default('http://localhost:5173'),
+
+  /** log: write emails to the log · smtp: Mailpit locally or any SMTP server · ses: AWS SES. */
+  MAIL_TRANSPORT: z.enum(['log', 'smtp', 'ses']).default('log'),
+  MAIL_FROM: z.string().default('ShopFast <no-reply@shopfast.local>'),
+  SMTP_HOST: z.string().default('127.0.0.1'),
+  SMTP_PORT: z.coerce.number().int().positive().default(1025),
+  SMTP_SECURE: booleanString.default('false'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  AWS_REGION: z.string().default('ap-southeast-2'),
+
+  /** Background jobs (F05). */
+  OUTBOX_POLL_MS: z.coerce.number().int().positive().default(1000),
+  PAYMENT_REMINDER_DELAY_MINUTES: z.coerce.number().int().positive().default(30),
+  /** Share of calls the simulated warehouse partner fails, to demonstrate retries and dead letters. */
+  PARTNER_FAILURE_RATE: z.coerce.number().min(0).max(1).default(0.2),
+
   /** Off only for load tests that measure raw throughput. */
   RATE_LIMIT_ENABLED: booleanString.default('true'),
 

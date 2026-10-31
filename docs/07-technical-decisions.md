@@ -75,6 +75,16 @@ Tiêu chí "Bảo vệ quyết định kỹ thuật" là **điều kiện bắt 
 - **Quyết định:** `product:{id}` và `catalog:list:v{n}:{hash}` chỉ chứa dữ liệu ít đổi (tên, giá, phân loại), TTL 5–10 phút. Đổi giá thì xoá `product:{id}` và tăng `version:catalog`, khiến mọi khoá danh sách cũ không còn ai đọc tới. Tồn kho lưu riêng ở `stock:{id}` (TTL 60 giây), đọc hàng loạt bằng `MGET`, và bị xoá ngay **sau khi commit** đặt hàng, huỷ đơn hoặc kiểm kê. Mọi lần xoá đều xoá lần hai sau 500 ms, để đuổi giá trị cũ do một request đọc chạy chen ghi lại.
 - **Đánh đổi:** mỗi lần đọc danh sách tốn 3 lượt gọi Redis (version, danh sách, `MGET` tồn kho) thay vì 1. Đổi lại, đo được tỉ lệ trúng 99,6% với khoảng 1.200 request/giây ([báo cáo tải](reports/load-test-local-2026-10-31.md)). Lúc đặt hàng vẫn đọc giá và tồn kho từ DB, nên cache có trễ thì khách cũng không bao giờ bị tính sai.
 
+### ADR-16 — Hoá đơn HTML lưu trong PostgreSQL thay vì PDF trên S3
+- **Bối cảnh:** SRS chỉ yêu cầu "tạo hoá đơn" như một tác vụ nền. Sinh PDF cần thư viện font tiếng Việt, cần nơi lưu file và URL ký tạm thời.
+- **Quyết định:** worker dựng hoá đơn HTML có CSS in ấn, lưu cột `invoices.html` (unique `order_id`). API trả `text/html` theo cùng quy tắc quyền của đơn hàng; người dùng in ra PDF bằng trình duyệt nếu cần.
+- **Đánh đổi:** không có file PDF "chính thức"; mỗi hoá đơn vài KB trong DB (được sao lưu cùng dữ liệu, không lệch với S3). Khi cần PDF có thể thêm processor đọc HTML này mà không đổi luồng hiện tại.
+
+### ADR-17 — Gửi email qua cổng có thể thay: SES → SMTP → log
+- **Bối cảnh:** tài khoản AWS của lớp có thể bị giới hạn SES (sandbox, chỉ gửi tới địa chỉ đã xác minh). Khi chạy test thì không được gửi thư thật.
+- **Quyết định:** `MailTransport` có ba bản cài, chọn bằng `MAIL_TRANSPORT`: `ses` (SESv2, credential tạm thời từ instance role), `smtp` (Gmail App Password đặt trong SSM, hoặc Mailpit khi chạy local), `log` (mặc định). Việc "chỉ gửi một lần" nằm ở `EmailSender` (bảng `email_logs`), không phụ thuộc nhà cung cấp.
+- **Đánh đổi:** worker chạy trong container, nên muốn lấy credential instance role thì phải nâng IMDSv2 hop limit từ 1 lên 2. Nâng như vậy thì mọi container trên máy đều đọc được credential của role. Role chỉ có quyền tối thiểu, và mạng `backend` là internal, nên chấp nhận được. Nếu không muốn nâng hop limit thì dùng `smtp`.
+
 ### ADR-11 — Trợ lý AI chỉ được "đề xuất", con người "thực thi"
 - **Bối cảnh:** LLM có thể sai hoặc bị prompt injection; SRS bắt buộc người xác nhận thao tác ghi.
 - **Quyết định:** không có tool ghi; `propose_action` chỉ tạo bản ghi; thực thi bằng endpoint riêng, danh tính nhân viên, có audit.

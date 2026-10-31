@@ -1,9 +1,12 @@
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import { InjectQueue } from '@nestjs/bullmq';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppError } from '../../common/errors/app-error';
 import { CounterStore } from '../../common/rate-limit/counter-store';
 import { Env } from '../../infra/config/env.schema';
+import { Queue } from 'bullmq';
+import { jobId, QUEUES } from '../../infra/queue/queue.constants';
 import { ResilientRedis, UNAVAILABLE } from '../../infra/redis/resilient-redis';
 
 const OTP_TTL_SECONDS = 300;
@@ -13,7 +16,7 @@ const MAX_VERIFY_ATTEMPTS = 5;
  * One-time codes for verifying an email (later: password reset).
  * The code is stored hashed, expires after 5 minutes and allows 5 guesses.
  * Sending is rate-limited by the `otp*` policies on the controller.
- * Delivery by email arrives with the background jobs (phase 3); until then non-production logs it.
+ * The code is emailed by the worker (email queue); development also logs it.
  */
 @Injectable()
 export class OtpService {
@@ -23,6 +26,7 @@ export class OtpService {
   constructor(
     private readonly redis: ResilientRedis,
     private readonly counters: CounterStore,
+    @InjectQueue(QUEUES.email) private readonly emailQueue: Queue,
     config: ConfigService<Env, true>,
   ) {
     this.isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
@@ -39,6 +43,20 @@ export class OtpService {
         .exec(),
     );
     if (stored === UNAVAILABLE) {
+      throw new AppError(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        'OTP_UNAVAILABLE',
+        'Chưa gửi được mã xác thực lúc này. Vui lòng thử lại sau ít phút.',
+      );
+    }
+    const issuedAt = Date.now();
+    try {
+      await this.emailQueue.add(
+        'otp',
+        { email: target, code, issuedAt },
+        { jobId: jobId('otp', target, issuedAt) },
+      );
+    } catch {
       throw new AppError(
         HttpStatus.SERVICE_UNAVAILABLE,
         'OTP_UNAVAILABLE',

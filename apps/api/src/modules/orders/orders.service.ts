@@ -4,6 +4,7 @@ import { AuthUser } from '../../common/auth/auth-user';
 import { isStaff } from '../../common/auth/role.enum';
 import { Paginated, paginated } from '../../common/dto/pagination.dto';
 import { isUniqueViolation, TransactionRunner, Tx } from '../../infra/database/transaction-runner';
+import { OutboxRepository } from '../../infra/outbox/outbox.repository';
 import { CartRepository } from '../cart/cart.repository';
 import { ProductCache } from '../catalog/product-cache';
 import { InventoryRepository } from '../inventory/inventory.repository';
@@ -40,6 +41,7 @@ export class OrdersService {
     private readonly cart: CartRepository,
     private readonly tx: TransactionRunner,
     private readonly productCache: ProductCache,
+    private readonly outbox: OutboxRepository,
   ) {}
 
   /**
@@ -115,7 +117,14 @@ export class OrdersService {
           })),
         );
         await this.cart.clear(tx, user.id);
-        return { orderId: id, productIds: lines.map((line) => line.productId) };
+        // Same transaction as the order: confirmation email, invoice, payment reminder and
+        // partner stock sync can never be lost, even if Redis is down right now.
+        const productIds = lines.map((line) => line.productId);
+        await this.outbox.add(tx, [
+          { type: 'OrderPlaced', aggregateId: id, payload: { orderId: id } },
+          { type: 'InventoryChanged', aggregateId: id, payload: { productIds, reason: 'ORDER' } },
+        ]);
+        return { orderId: id, productIds };
       }));
     } catch (error) {
       // Same key sent twice at the same moment: the unique index lets exactly one through.
@@ -233,6 +242,13 @@ export class OrdersService {
           actorId,
         })),
       );
+      await this.outbox.add(tx, [
+        {
+          type: 'InventoryChanged',
+          aggregateId: order.id,
+          payload: { productIds: restocked, reason: 'CANCEL' },
+        },
+      ]);
     }
     await this.orders.updateStatus(tx, order.id, to);
     await this.orders.insertHistory(tx, order.id, order.status, to, actorId);

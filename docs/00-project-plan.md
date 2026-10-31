@@ -53,7 +53,8 @@ Mỗi giai đoạn kết thúc bằng một **PR được merge và tự triển
 - `outbox` + worker relay; các hàng đợi `email`, `invoice`, `inventory-sync`, `payment-reminder`, `report`.
 - Retry + exponential backoff, dead-letter (bảng `failed_jobs`), idempotency bằng khoá duy nhất trong DB.
 - Lịch: nhắc thanh toán sau 30 phút (delayed job), báo cáo doanh thu 00:05 hằng đêm (repeatable job).
-- Trang admin: số job chờ / đang chạy / hoàn tất / thất bại; Bull Board để xem chi tiết.
+- Trang admin "Tác vụ nền": số job chờ / đang chạy / hẹn giờ / lỗi, tác vụ lỗi + nút chạy lại, báo cáo doanh thu.
+- Email: `MAIL_TRANSPORT=ses` trên production (thử trước), dự phòng `smtp` (Gmail); Mailpit khi chạy local.
 
 **Định nghĩa hoàn thành:** chạy lại một job email 3 lần → khách nhận đúng 1 email; giả lập đối tác lỗi → job vào DLQ kèm lý do.
 

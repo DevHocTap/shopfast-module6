@@ -5,6 +5,7 @@ import { RequireAuth } from './components/layout/RequireAuth';
 import { ButtonLink } from './components/ui/Button';
 import { EmptyState } from './components/ui/States';
 import { LoginPage, RegisterPage } from './features/auth/AuthPages';
+import { BackgroundJobsPage } from './features/background-jobs/BackgroundJobsPage';
 import { CartPage } from './features/cart/CartPage';
 import { CatalogPage } from './features/catalog/CatalogPage';
 import { ProductDetailPage } from './features/catalog/ProductDetailPage';
@@ -79,6 +80,14 @@ export const router = createBrowserRouter(
           element: (
             <RequireAuth roles={['ADMIN']}>
               <SystemStatusPage />
+            </RequireAuth>
+          ),
+        },
+        {
+          path: 'jobs',
+          element: (
+            <RequireAuth roles={['ADMIN']}>
+              <BackgroundJobsPage />
             </RequireAuth>
           ),
         },

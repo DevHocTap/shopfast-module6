@@ -10,6 +10,13 @@ import { createDataSource } from '../../src/infra/database/data-source';
 import { REDIS_CLIENT } from '../../src/infra/redis/redis.constants';
 
 const TABLES = [
+  'outbox_events',
+  'email_logs',
+  'invoices',
+  'failed_jobs',
+  'daily_revenue_reports',
+  'partner_sync_logs',
+  'voucher_redemptions', // vouchers themselves are seeded by a migration and stay
   'payments',
   'order_status_history',
   'order_items',

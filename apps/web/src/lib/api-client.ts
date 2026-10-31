@@ -36,22 +36,36 @@ export interface RequestOptions {
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  let response = await send(path, options, tokenSource.current());
+  const response = await sendAuthenticated(path, options);
+  const body: unknown = response.status === 204 ? null : await response.json().catch(() => null);
+  if (response.ok || options.acceptStatuses?.includes(response.status)) return body as T;
+  throw toApiError(response.status, body);
+}
+
+/** For non-JSON documents (e.g. the HTML invoice); errors still use the JSON contract. */
+export async function apiText(path: string): Promise<string> {
+  const response = await sendAuthenticated(path, { headers: { Accept: 'text/html' } });
+  if (response.ok) return response.text();
+  throw toApiError(response.status, await response.json().catch(() => null));
+}
+
+async function sendAuthenticated(path: string, options: RequestOptions): Promise<Response> {
+  const response = await send(path, options, tokenSource.current());
 
   // Access token expired: renew it once through the httpOnly refresh cookie, then replay.
   if (response.status === 401 && options.retryOnUnauthorized !== false && tokenSource.current()) {
     const fresh = await tokenSource.refresh();
-    if (fresh) response = await send(path, options, fresh);
+    if (fresh) return send(path, options, fresh);
   }
+  return response;
+}
 
-  const body: unknown = response.status === 204 ? null : await response.json().catch(() => null);
-  if (response.ok || options.acceptStatuses?.includes(response.status)) return body as T;
-
+function toApiError(status: number, body: unknown): ApiError {
   const error = (body ?? {}) as { code?: string; message?: string; details?: unknown };
-  throw new ApiError(
-    response.status,
+  return new ApiError(
+    status,
     error.code ?? 'UNKNOWN',
-    error.message ?? `Máy chủ trả lỗi ${response.status}.`,
+    error.message ?? `Máy chủ trả lỗi ${status}.`,
     error.details,
   );
 }
