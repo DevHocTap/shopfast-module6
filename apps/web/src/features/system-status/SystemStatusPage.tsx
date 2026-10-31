@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/ui/States';
 import { ComponentCheck, ReadinessReport, useSystemStatus } from './use-system-status';
 
 const OVERALL = {
@@ -27,35 +29,25 @@ export function SystemStatusPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex h-16 max-w-2xl items-center px-4">
-          <span className="text-lg font-semibold text-brand-700">ShopFast</span>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-2xl px-4 py-12">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Trạng thái hệ thống</h1>
-            <p className="mt-2 text-muted">Kết nối của API tới cơ sở dữ liệu và bộ nhớ đệm.</p>
-          </div>
-          <button
-            type="button"
+    <div className="max-w-2xl">
+      <PageHeader
+        title="Trạng thái hệ thống"
+        description="Kết nối của API tới cơ sở dữ liệu và bộ nhớ đệm."
+        actions={
+          <Button
+            loading={refreshing}
+            disabled={state.kind === 'loading'}
             onClick={() => void onRefresh()}
-            disabled={refreshing || state.kind === 'loading'}
-            className="min-h-11 rounded-sm bg-brand-600 px-4 font-medium text-white transition-colors duration-150 hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {refreshing ? 'Đang kiểm tra…' : 'Kiểm tra lại'}
-          </button>
-        </div>
-
-        {state.kind === 'loading' && <StatusSkeleton />}
-        {state.kind === 'error' && <StatusError message={state.message} onRetry={onRefresh} />}
-        {state.kind === 'loaded' && (
-          <StatusReport report={state.report} checkedAt={state.checkedAt} />
-        )}
-      </main>
+            Kiểm tra lại
+          </Button>
+        }
+      />
+      {state.kind === 'loading' && <StatusSkeleton />}
+      {state.kind === 'error' && <StatusError message={state.message} onRetry={onRefresh} />}
+      {state.kind === 'loaded' && (
+        <StatusReport report={state.report} checkedAt={state.checkedAt} />
+      )}
     </div>
   );
 }
