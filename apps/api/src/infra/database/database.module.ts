@@ -1,8 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppConfigService } from '../config/config.module';
+import { TransactionRunner } from './transaction-runner';
 
+@Global()
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -22,5 +24,7 @@ import { AppConfigService } from '../config/config.module';
       }),
     }),
   ],
+  providers: [TransactionRunner],
+  exports: [TransactionRunner],
 })
 export class DatabaseModule {}

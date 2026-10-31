@@ -3,11 +3,11 @@ import 'reflect-metadata';
 import 'dotenv/config';
 import { join } from 'node:path';
 import { DataSource } from 'typeorm';
-import { validateEnv } from '../config/env.schema';
+import { validateDbEnv } from '../config/env.schema';
 
 /** DataSource for the TypeORM CLI and the standalone migration runner. */
 export function createDataSource(): DataSource {
-  const env = validateEnv(process.env);
+  const env = validateDbEnv(process.env);
   return new DataSource({
     type: 'postgres',
     host: env.DB_HOST,
@@ -15,7 +15,7 @@ export function createDataSource(): DataSource {
     username: env.DB_USER,
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
-    entities: [join(__dirname, '..', '..', '**', '*.entity.{ts,js}')],
+    entities: [join(__dirname, '..', '..', '**', '*.{entity,entities}.{ts,js}')],
     migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
     migrationsTableName: 'migrations',
   });

@@ -1,17 +1,12 @@
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { AppModule } from '../../src/app.module';
-import { configureApp } from '../../src/app.setup';
+import { createTestApp } from '../utils/test-app';
 
 describe('Health (integration: real PostgreSQL + Redis)', () => {
   let app: NestExpressApplication;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication<NestExpressApplication>();
-    configureApp(app);
-    await app.init();
+    ({ app } = await createTestApp());
   });
 
   afterAll(async () => {

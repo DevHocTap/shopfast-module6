@@ -20,6 +20,8 @@ flowchart TB
   feature --> infra
 ```
 
+> **Tiến độ:** Giai đoạn 1 đã có `auth` (JWT access 15 phút + refresh token xoay vòng trong cookie httpOnly), `users`, `catalog`, `inventory`, `cart`, `orders` (gồm thanh toán giả lập `POST /orders/:id/pay` và màn hình kho). OTP và voucher làm ở Giai đoạn 2 cùng rate limit. Giỏ hàng lưu ở bảng `cart_items` (khoá chính `user_id, product_id`), không có bảng `carts` riêng.
+
 Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình worker.
 
 ---

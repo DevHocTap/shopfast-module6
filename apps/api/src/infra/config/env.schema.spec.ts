@@ -6,6 +6,7 @@ const base = {
   DB_PASSWORD: 'secret',
   DB_NAME: 'shopfast',
   REDIS_HOST: 'localhost',
+  JWT_ACCESS_SECRET: 'x'.repeat(32),
 };
 
 describe('validateEnv', () => {

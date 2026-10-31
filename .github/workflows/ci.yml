@@ -72,6 +72,7 @@ jobs:
       REDIS_HOST: localhost
       REDIS_DB: '1'
       LOG_LEVEL: warn
+      JWT_ACCESS_SECRET: ci-only-not-a-real-secret-0123456789abcdef
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
