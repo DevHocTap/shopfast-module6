@@ -1,10 +1,10 @@
-import { ArrowLeft, Check, ReceiptText } from 'lucide-react';
+import { ArrowLeft, Check, FileText, ReceiptText } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button, ButtonLink } from '../../components/ui/Button';
 import { ConfirmButton } from '../../components/ui/ConfirmButton';
 import { Card, EmptyState, ErrorState, InlineAlert, Skeleton } from '../../components/ui/States';
-import { api, ApiError, errorMessage } from '../../lib/api-client';
+import { api, ApiError, apiText, errorMessage } from '../../lib/api-client';
 import { formatDateTime, formatVND } from '../../lib/format';
 import { CUSTOMER_CANCELLABLE, STATUS_FLOW, STATUS_LABEL } from '../../lib/order-status';
 import { useAuth } from '../../lib/auth';
@@ -175,9 +175,57 @@ export function OrderDetailPage() {
               ? `Đã thanh toán lúc ${formatDateTime(order.payment.paidAt)} (giả lập).`
               : 'Chưa thanh toán.'}
           </p>
+          <InvoiceLink order={order} />
         </Card>
       </div>
     </>
+  );
+}
+
+/** The invoice is produced by a background job a few seconds after the order is placed. */
+function InvoiceLink({ order }: { order: OrderDetail }) {
+  const toast = useToast();
+  const [opening, setOpening] = useState(false);
+
+  if (!order.invoiceNumber) {
+    return (
+      <p className="mt-4 text-sm text-muted">Hoá đơn đang được tạo, tải lại trang sau ít giây.</p>
+    );
+  }
+
+  async function open() {
+    // Open the tab inside the click (popup blockers), then fill it once the invoice arrives.
+    const tab = window.open('', '_blank');
+    setOpening(true);
+    try {
+      const html = await apiText(`/orders/${order.id}/invoice`);
+      const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      if (tab) tab.location.href = url;
+      else window.location.assign(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      tab?.close();
+      toast.error(errorMessage(error));
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 border-t border-border pt-4">
+      <p className="text-sm text-muted">
+        Hoá đơn <span className="font-mono">{order.invoiceNumber}</span>
+      </p>
+      <Button
+        variant="secondary"
+        className="mt-2 w-full"
+        loading={opening}
+        onClick={() => void open()}
+      >
+        {!opening && <FileText className="size-4" aria-hidden />}
+        Xem hoá đơn
+      </Button>
+    </div>
   );
 }
 

@@ -90,6 +90,8 @@ export interface OrderDetail extends OrderSummary {
   }[];
   history: { from: OrderStatus | null; to: OrderStatus; at: string }[];
   payment: { amount: number; method: string; paidAt: string } | null;
+  /** Set once the background invoice job has run. */
+  invoiceNumber: string | null;
 }
 
 export interface StockLevel {
@@ -107,4 +109,38 @@ export interface CacheStats {
   bypasses: number;
   hitRatio: number;
   redis: 'closed' | 'open' | 'half-open';
+}
+
+export type QueueName = 'email' | 'invoice' | 'inventory-sync' | 'payment-reminder' | 'report';
+
+export interface QueueCounts {
+  name: QueueName;
+  waiting: number;
+  active: number;
+  delayed: number;
+  completed: number;
+  failed: number;
+}
+
+export interface QueueOverview {
+  queues: QueueCounts[];
+  pendingOutboxEvents: number;
+}
+
+export interface FailedJob {
+  id: string;
+  queue: string;
+  jobName: string;
+  jobId: string | null;
+  payload: unknown;
+  reason: string;
+  attemptsMade: number;
+  failedAt: string;
+  retriedAt: string | null;
+}
+
+export interface DailyRevenue {
+  date: string;
+  orderCount: number;
+  revenue: number;
 }

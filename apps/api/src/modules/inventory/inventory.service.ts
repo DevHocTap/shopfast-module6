@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { AuthUser } from '../../common/auth/auth-user';
 import { AppError } from '../../common/errors/app-error';
 import { TransactionRunner } from '../../infra/database/transaction-runner';
+import { OutboxRepository } from '../../infra/outbox/outbox.repository';
 import { ProductCache } from '../catalog/product-cache';
 import { InventoryRepository, StockLevel } from './inventory.repository';
 
@@ -14,6 +15,7 @@ export class InventoryService {
     private readonly repo: InventoryRepository,
     private readonly tx: TransactionRunner,
     private readonly productCache: ProductCache,
+    private readonly outbox: OutboxRepository,
   ) {}
 
   async getBySku(sku: string): Promise<StockLevel> {
@@ -31,6 +33,13 @@ export class InventoryService {
       if (delta !== 0) {
         await this.repo.recordMovements(tx, [
           { productId, delta, reason: 'ADJUST', actorId: actor.id },
+        ]);
+        await this.outbox.add(tx, [
+          {
+            type: 'InventoryChanged',
+            aggregateId: productId,
+            payload: { productIds: [productId], reason: 'ADJUST' },
+          },
         ]);
       }
     });

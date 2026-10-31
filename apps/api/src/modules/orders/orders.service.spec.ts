@@ -56,14 +56,16 @@ function setup() {
   const cart = { lines: jest.fn().mockResolvedValue([line()]), clear: jest.fn() };
   const tx = { run: jest.fn((work: (t: unknown) => Promise<unknown>) => work(TX)) };
   const productCache = { stockChanged: jest.fn() };
+  const outbox = { add: jest.fn() };
   const service = new OrdersService(
     orders as unknown as OrdersRepository,
     inventory as unknown as InventoryRepository,
     cart as unknown as CartRepository,
     tx as unknown as TransactionRunner,
     productCache as unknown as ProductCache,
+    outbox,
   );
-  return { service, orders, inventory, cart, tx, detail, productCache };
+  return { service, orders, inventory, cart, tx, detail, productCache, outbox };
 }
 
 describe('OrdersService.placeOrder', () => {
@@ -198,6 +200,21 @@ describe('OrdersService vouchers and cache', () => {
     });
   });
 
+  it('records OrderPlaced and InventoryChanged in the outbox inside the order transaction', async () => {
+    const { service, outbox } = setup();
+
+    await service.placeOrder(customer, ATTEMPT);
+
+    expect(outbox.add).toHaveBeenCalledWith(TX, [
+      { type: 'OrderPlaced', aggregateId: 'o1', payload: { orderId: 'o1' } },
+      {
+        type: 'InventoryChanged',
+        aggregateId: 'o1',
+        payload: { productIds: ['p1'], reason: 'ORDER' },
+      },
+    ]);
+  });
+
   it('drops the stock cache of ordered products only after the commit', async () => {
     const { service, productCache, tx } = setup();
 
@@ -254,7 +271,7 @@ describe('OrdersService status changes', () => {
   });
 
   it('returns stock to inventory when an order is cancelled', async () => {
-    const { service, orders, inventory, productCache } = setup();
+    const { service, orders, inventory, productCache, outbox } = setup();
     orders.lock.mockResolvedValue(head({ status: OrderStatus.PAID }));
 
     await service.cancelByCustomer(customer, 'o1');
@@ -271,6 +288,12 @@ describe('OrdersService status changes', () => {
       'u1',
     );
     expect(productCache.stockChanged).toHaveBeenCalledWith(['p1']);
+    expect(outbox.add).toHaveBeenCalledWith(TX, [
+      expect.objectContaining({
+        type: 'InventoryChanged',
+        payload: { productIds: ['p1'], reason: 'CANCEL' },
+      }),
+    ]);
   });
 
   it('does not let a customer cancel once packing started', async () => {

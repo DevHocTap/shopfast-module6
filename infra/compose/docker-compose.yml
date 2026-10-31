@@ -41,7 +41,7 @@ services:
     profiles: [app]
     build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
     env_file: [{ path: ../../apps/api/.env, required: false }]
-    environment: { DB_HOST: postgres, REDIS_HOST: redis, NODE_ENV: production }
+    environment: { DB_HOST: postgres, REDIS_HOST: redis, SMTP_HOST: mailpit, NODE_ENV: production }
     ports: ['127.0.0.1:3000:3000']
     depends_on:
       postgres: { condition: service_healthy }
@@ -52,7 +52,7 @@ services:
     build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
     command: ['node', 'dist/worker.js']
     env_file: [{ path: ../../apps/api/.env, required: false }]
-    environment: { DB_HOST: postgres, REDIS_HOST: redis, NODE_ENV: production }
+    environment: { DB_HOST: postgres, REDIS_HOST: redis, SMTP_HOST: mailpit, NODE_ENV: production }
     healthcheck:
       test: ['CMD-SHELL', 'test $$(( $$(date +%s) - $$(stat -c %Y /tmp/worker-heartbeat) )) -lt 30']
       interval: 15s

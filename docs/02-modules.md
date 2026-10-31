@@ -37,8 +37,7 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
 | `queue` | Đăng ký hàng đợi BullMQ, hằng số tên queue/job, cấu hình retry mặc định, chuyển job hết lượt sang `failed_jobs` | `defaultJobOptions: { attempts, backoff: exponential, removeOnComplete }` | A, W |
 | `outbox` | `OutboxService.add(tx, event)` (gọi trong transaction); `OutboxRelay` quét & đẩy sang BullMQ | `FOR UPDATE SKIP LOCKED`, quét mỗi 1 s, batch 100 | add: A · relay: W |
 | `llm` | `LlmPort` (chat + tool use + structured output); `AnthropicLlmAdapter`; `FakeLlmAdapter` cho test | Timeout 20 s, giới hạn số vòng tool (≤ 5) | A, W |
-| `mail` | `MailPort`; `SesMailAdapter` (prod), `SmtpMailAdapter` (Mailpit local); template | — | W |
-| `storage` | Lưu file hoá đơn PDF: S3 (prod) / thư mục volume (local) | Khoá file theo `invoiceNumber` → ghi lại không tạo bản thứ hai | W |
+| `mail` | `MailTransport` chọn bằng `MAIL_TRANSPORT`: `ses` (AWS SESv2, credential từ instance role), `smtp` (Mailpit local hoặc Gmail), `log` (chỉ ghi log — mặc định, dùng cho test) | Lỗi gửi ném ra để BullMQ retry; `EmailSender` đảm bảo mỗi email chỉ gửi một lần | W |
 | `realtime-emitter` | Phát sự kiện Socket.IO từ worker qua `@socket.io/redis-emitter` | — | W |
 
 ## B. Xuyên suốt (`src/common`)
@@ -118,18 +117,18 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
 - **Retry:** 5 lần, exponential backoff từ 10 s.
 
 ### C.10 `invoices` — F05.1, F05.3
-- **Trách nhiệm:** processor `invoice`: sinh PDF (pdfkit), lưu `storage`, ghi bảng `invoices` (unique `order_id`).
-- **Endpoint:** `GET /orders/:id/invoice` (URL tải có thời hạn).
+- **Trách nhiệm:** processor `invoice`: dựng hoá đơn HTML in được (số `INV-yyyymmdd-<mã đơn>`, mọi chuỗi đều được escape), lưu vào bảng `invoices` (unique `order_id` → chạy lại không tạo bản thứ hai). Xem ADR-16.
+- **Endpoint:** `GET /orders/:id/invoice` → `text/html`, cùng quy tắc quyền như xem đơn (chủ đơn hoặc nhân viên); chưa có → 404 `INVOICE_NOT_READY`. Web mở hoá đơn ở tab mới.
 - **Retry:** 3 lần, backoff 30 s.
 
 ### C.11 `partner-sync` — F05.1, F05.2
-- **Trách nhiệm:** processor `inventory-sync`: gọi API đối tác (giả lập bằng `PartnerMockController` có tỉ lệ lỗi cấu hình được) để đồng bộ tồn kho.
-- **Bất biến:** gửi header `Idempotency-Key = sync:{productId}:{inventoryVersion}`; đối tác giả lập lưu khoá đã xử lý.
+- **Trách nhiệm:** processor `inventory-sync`: gọi API đối tác (giả lập trong tiến trình bằng `SimulatedPartnerClient`, tỉ lệ lỗi `PARTNER_FAILURE_RATE`, mặc định 0,2) để đồng bộ tồn kho.
+- **Bất biến:** gửi `idempotencyKey = stock-{productId}-v{inventoryVersion}`; đối tác giả lập lưu khoá vào `partner_sync_logs` (unique) nên nhận lại lần hai trả `duplicate`.
 - **Retry:** 8 lần, exponential backoff 5 s → ~10 phút; hết lượt → `failed_jobs` kèm `reason` và payload, admin bấm "Chạy lại".
 
 ### C.12 `reports` — F05.4
 - **Trách nhiệm:** job lặp `daily-revenue` lúc 00:05 (Asia/Ho_Chi_Minh): tổng hợp doanh thu ngày hôm trước → `daily_revenue_reports` (unique `report_date`) → gửi email admin.
-- **Bất biến:** `jobId = daily-revenue:{yyyy-mm-dd}`; upsert theo `report_date`.
+- **Bất biến:** lịch đăng ký bằng `upsertJobScheduler` (khởi động lại worker không nhân đôi lịch); upsert theo `report_date`; email admin khoá theo `(daily-report, ngày:email)` nên mỗi admin nhận đúng một thư/ngày. Admin có thể chạy tay cho một ngày bất kỳ.
 
 ### C.13 `rate-limit` — F03
 - **Trách nhiệm:** guard toàn cục, bộ đếm Redis (`CounterStore`), xử lý 429, chống dò mật khẩu (`LoginAttempts`). Không dùng `@nestjs/throttler`, lý do ở ADR-14.
@@ -179,10 +178,11 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
 - `GET /health/ready` → `{ status: 'ok' | 'degraded' | 'down', info: { database, redis } }` (`@nestjs/terminus`). DB lỗi → 503; chỉ Redis lỗi → 200 + `degraded` (vẫn phục vụ được).
 
 ### C.17 `admin` — F07.2
-- `GET /admin/queues/stats` → mỗi queue: `waiting, active, completed, failed, delayed` (`queue.getJobCounts()`).
-- `GET /admin/failed-jobs`, `POST /admin/failed-jobs/:id/retry`.
+- `GET /admin/queues` → mỗi queue: `waiting, active, completed, failed, delayed` (`queue.getJobCounts()`) + số sự kiện outbox chưa phát. Redis không trả lời trong 1,5 s → 503 `QUEUE_UNAVAILABLE`.
+- `GET /admin/failed-jobs`; `POST /admin/failed-jobs/:id/retry` → 202, đưa lại job với id mới; chạy lại lần hai → 409 `ALREADY_RETRIED`.
+- `GET /admin/reports/daily-revenue` (14 ngày gần nhất); `POST /admin/reports/daily-revenue` `{ date? }` → 202.
 - `GET /admin/cache/stats` → hit, miss, tỉ lệ trúng (chứng minh ≥ 80%).
-- Bull Board mount tại `/admin/bull` (chỉ ADMIN — kiểm tra JWT qua cookie httpOnly, hoặc Nginx giới hạn IP quản trị).
+- Web: trang **Tác vụ nền** (`/jobs`, chỉ ADMIN) thay cho Bull Board — tự làm mới mỗi 5 s, có nút "Chạy lại" và "Tạo báo cáo hôm nay". Không mở thêm một giao diện quản trị thứ hai cần bảo vệ riêng.
 
 ## D. Web (`apps/web`)
 

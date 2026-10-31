@@ -45,8 +45,13 @@ describe('Protection and cache (integration: real PostgreSQL + Redis)', () => {
     await db.query('INSERT INTO inventories (product_id, quantity) VALUES ($1, 100)', [
       ids.product,
     ]);
-    // Vouchers come from the migration; reset them to a known state.
-    await db.query(`UPDATE vouchers SET remaining_uses = 100000 WHERE code = 'SALE10'`);
+    // The migration seeds SALE10; the test still pins its own known state.
+    await db.query(
+      `INSERT INTO vouchers (code, percent_off, remaining_uses, ends_at)
+       VALUES ('SALE10', 10, 100000, now() + interval '1 year')
+       ON CONFLICT (code) DO UPDATE SET percent_off = 10, remaining_uses = 100000,
+         starts_at = now() - interval '1 day', ends_at = now() + interval '1 year', is_active = true`,
+    );
   }, 60_000);
 
   afterAll(async () => {

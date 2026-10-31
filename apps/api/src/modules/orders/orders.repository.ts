@@ -50,6 +50,8 @@ export interface OrderDetail extends OrderSummary {
   subtotal: number;
   discount: number;
   voucherCode: string | null;
+  /** Set once the background job has generated the invoice. */
+  invoiceNumber: string | null;
   updatedAt: Date;
   items: (NewOrderItem & { lineTotal: number })[];
   history: { from: OrderStatus | null; to: OrderStatus; at: Date }[];
@@ -244,13 +246,23 @@ export class OrdersRepository {
       this.dataSource.query('SELECT amount, method, paid_at FROM payments WHERE order_id = $1', [
         orderId,
       ]);
-    const [items, history, payments] = await Promise.all([itemsQuery, historyQuery, paymentQuery]);
+    const invoiceQuery: Promise<{ invoice_number: string }[]> = this.dataSource.query(
+      'SELECT invoice_number FROM invoices WHERE order_id = $1',
+      [orderId],
+    );
+    const [items, history, payments, invoices] = await Promise.all([
+      itemsQuery,
+      historyQuery,
+      paymentQuery,
+      invoiceQuery,
+    ]);
 
     return {
       ...toSummary(head),
       subtotal: Number(head.subtotal),
       discount: Number(head.discount),
       voucherCode: head.voucher_code,
+      invoiceNumber: invoices[0]?.invoice_number ?? null,
       updatedAt: head.updated_at,
       items: items.map((i) => ({
         productId: i.product_id,

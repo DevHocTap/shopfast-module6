@@ -23,14 +23,17 @@ function setup() {
   };
   const tx = { run: jest.fn((work: (t: unknown) => Promise<unknown>) => work('TX')) };
   const productCache = { stockChanged: jest.fn() };
+  const outbox = { add: jest.fn() };
   return {
     service: new InventoryService(
       repo as unknown as InventoryRepository,
       tx as unknown as TransactionRunner,
       productCache as unknown as ProductCache,
+      outbox,
     ),
     repo,
     productCache,
+    outbox,
   };
 }
 
@@ -53,7 +56,7 @@ describe('InventoryService', () => {
   });
 
   it('records the difference of a stock count as an ADJUST movement', async () => {
-    const { service, repo, productCache } = setup();
+    const { service, repo, productCache, outbox } = setup();
 
     await service.setQuantity(actor, 'p1', 12);
 
@@ -62,6 +65,12 @@ describe('InventoryService', () => {
       { productId: 'p1', delta: 2, reason: 'ADJUST', actorId: 'w1' },
     ]);
     expect(productCache.stockChanged).toHaveBeenCalledWith(['p1']);
+    expect(outbox.add).toHaveBeenCalledWith('TX', [
+      expect.objectContaining({
+        type: 'InventoryChanged',
+        payload: { productIds: ['p1'], reason: 'ADJUST' },
+      }),
+    ]);
   });
 
   it('writes no movement when the count did not change', async () => {
