@@ -37,6 +37,8 @@ export interface OrderSummary {
   status: OrderStatus;
   total: number;
   itemCount: number;
+  /** Optimistic-lock version: send it back when changing the status. */
+  version: number;
   createdAt: Date;
   customer: { id: string; email: string; fullName: string };
 }
@@ -44,7 +46,6 @@ export interface OrderSummary {
 export interface OrderDetail extends OrderSummary {
   subtotal: number;
   discount: number;
-  version: number;
   updatedAt: Date;
   items: (NewOrderItem & { lineTotal: number })[];
   history: { from: OrderStatus | null; to: OrderStatus; at: Date }[];
@@ -214,7 +215,6 @@ export class OrdersRepository {
       ...toSummary(head),
       subtotal: Number(head.subtotal),
       discount: Number(head.discount),
-      version: head.version,
       updatedAt: head.updated_at,
       items: items.map((i) => ({
         productId: i.product_id,
@@ -269,6 +269,7 @@ function toSummary(r: RawSummary): OrderSummary {
     status: r.status,
     total: Number(r.total),
     itemCount: Number(r.item_count),
+    version: r.version,
     createdAt: r.created_at,
     customer: { id: r.customer_id, email: r.customer_email, fullName: r.customer_name },
   };

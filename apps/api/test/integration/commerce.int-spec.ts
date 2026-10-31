@@ -89,6 +89,11 @@ describe('Commerce core (integration: real PostgreSQL)', () => {
       await http.post('/api/auth/refresh').set('Cookie', newCookie).expect(401);
     });
 
+    it('answers a guest without a session cookie with 204, not an error', async () => {
+      await http.post('/api/auth/refresh').expect(204);
+      await http.post('/api/auth/refresh').set('Cookie', 'sf_refresh=forged').expect(401);
+    });
+
     it('sets the refresh cookie as httpOnly and SameSite=Strict, scoped to /api/auth', async () => {
       const res = await http
         .post('/api/auth/register')

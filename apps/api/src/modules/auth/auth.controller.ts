@@ -50,14 +50,20 @@ export class AuthController {
     return this.respond(res, await this.auth.login(dto));
   }
 
+  /** 200 with a new session; 204 when the browser has no session cookie (a guest, not an error). */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<SessionResponse> {
+  ): Promise<SessionResponse | undefined> {
+    const token = readRefreshCookie(req);
+    if (!token) {
+      res.status(HttpStatus.NO_CONTENT);
+      return undefined;
+    }
     try {
-      return this.respond(res, await this.auth.refresh(readRefreshCookie(req)));
+      return this.respond(res, await this.auth.refresh(token));
     } catch (error) {
       res.clearCookie(REFRESH_COOKIE, this.cookieOptions());
       throw error;
