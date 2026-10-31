@@ -1,17 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { Tx } from '../../infra/database/transaction-runner';
+import { returningRows, Tx } from '../../infra/database/transaction-runner';
 import { OrderStatus } from './order-state-machine';
 
 export const IDEMPOTENCY_CONSTRAINT = 'orders_user_idempotency_key';
+export const VOUCHER_ONCE_CONSTRAINT = 'voucher_redemptions_one_per_user';
 
 export interface NewOrder {
   code: string;
   userId: string;
   subtotal: number;
+  discount: number;
   total: number;
   idempotencyKey: string;
+  voucherCode: string | null;
 }
 
 export interface NewOrderItem {
@@ -46,6 +49,7 @@ export interface OrderSummary {
 export interface OrderDetail extends OrderSummary {
   subtotal: number;
   discount: number;
+  voucherCode: string | null;
   updatedAt: Date;
   items: (NewOrderItem & { lineTotal: number })[];
   history: { from: OrderStatus | null; to: OrderStatus; at: Date }[];
@@ -53,7 +57,7 @@ export interface OrderDetail extends OrderSummary {
 }
 
 const SUMMARY_SELECT = `
-  SELECT o.id, o.code, o.status, o.total, o.subtotal, o.discount, o.version,
+  SELECT o.id, o.code, o.status, o.total, o.subtotal, o.discount, o.voucher_code, o.version,
          o.created_at, o.updated_at,
          u.id AS customer_id, u.email AS customer_email, u.full_name AS customer_name,
          (SELECT COALESCE(sum(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
@@ -66,6 +70,7 @@ interface RawSummary {
   total: string;
   subtotal: string;
   discount: string;
+  voucher_code: string | null;
   version: number;
   created_at: Date;
   updated_at: Date;
@@ -90,11 +95,41 @@ export class OrdersRepository {
 
   async insertOrder(tx: Tx, order: NewOrder): Promise<string> {
     const rows: { id: string }[] = await tx.query(
-      `INSERT INTO orders (code, user_id, subtotal, total, idempotency_key)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [order.code, order.userId, order.subtotal, order.total, order.idempotencyKey],
+      `INSERT INTO orders (code, user_id, subtotal, discount, total, idempotency_key, voucher_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [
+        order.code,
+        order.userId,
+        order.subtotal,
+        order.discount,
+        order.total,
+        order.idempotencyKey,
+        order.voucherCode,
+      ],
     );
     return rows[0].id;
+  }
+
+  /**
+   * Takes one use of a voucher if it is active, inside its validity window and not exhausted.
+   * Same conditional-UPDATE pattern as stock: concurrent flash-sale orders cannot overspend it.
+   */
+  async claimVoucher(tx: Tx, code: string): Promise<number | null> {
+    const rows = await returningRows<{ percent_off: number }>(
+      tx,
+      `UPDATE vouchers SET remaining_uses = remaining_uses - 1
+        WHERE code = $1 AND is_active AND remaining_uses > 0 AND now() BETWEEN starts_at AND ends_at
+        RETURNING percent_off`,
+      [code],
+    );
+    return rows[0]?.percent_off ?? null;
+  }
+
+  async insertRedemption(tx: Tx, code: string, userId: string, orderId: string): Promise<void> {
+    await tx.query(
+      'INSERT INTO voucher_redemptions (voucher_code, user_id, order_id) VALUES ($1, $2, $3)',
+      [code, userId, orderId],
+    );
   }
 
   async insertItems(tx: Tx, orderId: string, items: NewOrderItem[]): Promise<void> {
@@ -215,6 +250,7 @@ export class OrdersRepository {
       ...toSummary(head),
       subtotal: Number(head.subtotal),
       discount: Number(head.discount),
+      voucherCode: head.voucher_code,
       updatedAt: head.updated_at,
       items: items.map((i) => ({
         productId: i.product_id,

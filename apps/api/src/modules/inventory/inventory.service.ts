@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { AuthUser } from '../../common/auth/auth-user';
 import { AppError } from '../../common/errors/app-error';
 import { TransactionRunner } from '../../infra/database/transaction-runner';
+import { ProductCache } from '../catalog/product-cache';
 import { InventoryRepository, StockLevel } from './inventory.repository';
 
 const stockNotFound = () =>
@@ -12,6 +13,7 @@ export class InventoryService {
   constructor(
     private readonly repo: InventoryRepository,
     private readonly tx: TransactionRunner,
+    private readonly productCache: ProductCache,
   ) {}
 
   async getBySku(sku: string): Promise<StockLevel> {
@@ -32,6 +34,7 @@ export class InventoryService {
         ]);
       }
     });
+    await this.productCache.stockChanged([productId]);
     const stock = await this.repo.findByProductId(productId);
     if (!stock) throw stockNotFound();
     return stock;

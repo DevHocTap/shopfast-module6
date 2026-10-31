@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
-import { PageHeader } from '../../components/ui/States';
+import { Card, PageHeader, Skeleton } from '../../components/ui/States';
+import { api } from '../../lib/api-client';
+import type { CacheStats } from '../../lib/types';
+import { useAsync } from '../../lib/use-async';
 import { ComponentCheck, ReadinessReport, useSystemStatus } from './use-system-status';
 
 const OVERALL = {
@@ -48,7 +51,54 @@ export function SystemStatusPage() {
       {state.kind === 'loaded' && (
         <StatusReport report={state.report} checkedAt={state.checkedAt} />
       )}
+      <CacheCard />
     </div>
+  );
+}
+
+const BREAKER_LABEL: Record<CacheStats['redis'], string> = {
+  closed: 'Đang dùng Redis',
+  'half-open': 'Đang thử kết nối lại Redis',
+  open: 'Tạm bỏ qua Redis (đọc thẳng cơ sở dữ liệu)',
+};
+
+/** SRS F04: product data hit ratio must stay at or above 80%. */
+function CacheCard() {
+  const { state } = useAsync(() => api<CacheStats>('/admin/cache/stats'), []);
+  return (
+    <Card className="mt-8 p-6">
+      <h2 className="text-lg font-semibold">Bộ nhớ đệm sản phẩm</h2>
+      {state.status === 'loading' && <Skeleton className="mt-4 h-12 w-full" />}
+      {state.status === 'error' && (
+        <p className="mt-2 text-muted">Không đọc được số liệu bộ nhớ đệm.</p>
+      )}
+      {state.status === 'success' && (
+        <dl className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <dt className="text-sm text-muted">Tỉ lệ trúng</dt>
+            <dd
+              className={`text-2xl font-semibold tabular-nums ${
+                state.data.hitRatio >= 0.8 ? 'text-success-700' : 'text-warning-700'
+              }`}
+            >
+              {(state.data.hitRatio * 100).toFixed(1)}%
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted">Trúng / trượt</dt>
+            <dd className="font-medium tabular-nums">
+              {state.data.hits.toLocaleString('vi-VN')} /{' '}
+              {state.data.misses.toLocaleString('vi-VN')}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted">Trạng thái</dt>
+            <dd className="font-medium">{BREAKER_LABEL[state.data.redis]}</dd>
+          </div>
+        </dl>
+      )}
+      <p className="mt-4 text-sm text-muted">Mục tiêu theo yêu cầu: tối thiểu 80%.</p>
+    </Card>
   );
 }
 

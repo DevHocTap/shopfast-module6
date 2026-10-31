@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import { Role } from '../../common/auth/role.enum';
+import { LoginAttempts } from '../../common/rate-limit/login-attempts.service';
 import { Env } from '../../infra/config/env.schema';
 import { UserEntity } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
@@ -37,14 +38,20 @@ function setup() {
   const config = {
     get: jest.fn((key: string) => (key === 'JWT_ACCESS_TTL_SECONDS' ? 900 : 7)),
   };
+  const attempts = {
+    assertNotLocked: jest.fn().mockResolvedValue(undefined),
+    recordFailure: jest.fn(),
+    recordSuccess: jest.fn(),
+  };
   const service = new AuthService(
     users as unknown as UsersService,
     jwt as unknown as JwtService,
     hasher,
     tokens as unknown as Repository<RefreshTokenEntity>,
+    attempts as unknown as LoginAttempts,
     config as unknown as ConfigService<Env, true>,
   );
-  return { service, users, jwt, hasher, tokens };
+  return { service, users, jwt, hasher, tokens, attempts };
 }
 
 const storedToken = (overrides: Partial<RefreshTokenEntity> = {}): RefreshTokenEntity => ({
@@ -137,6 +144,33 @@ describe('AuthService', () => {
       });
       // A hash comparison still ran for the unknown email (no timing shortcut).
       expect(hasher.verify).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('login brute-force protection', () => {
+    it('counts a failure against the target account and resets it on success', async () => {
+      const { service, users, hasher, attempts } = setup();
+      users.findByEmail.mockResolvedValue(user);
+
+      hasher.verify.mockResolvedValueOnce(false);
+      await expect(
+        service.login({ email: 'an@example.com', password: 'bad' }),
+      ).rejects.toBeDefined();
+      expect(attempts.recordFailure).toHaveBeenCalledWith('an@example.com');
+
+      hasher.verify.mockResolvedValueOnce(true);
+      await service.login({ email: 'an@example.com', password: 'good' });
+      expect(attempts.recordSuccess).toHaveBeenCalledWith('an@example.com');
+    });
+
+    it('refuses a locked account without checking the password', async () => {
+      const { service, hasher, attempts } = setup();
+      attempts.assertNotLocked.mockRejectedValue(new Error('locked'));
+
+      await expect(service.login({ email: 'an@example.com', password: 'x' })).rejects.toThrow(
+        'locked',
+      );
+      expect(hasher.verify).not.toHaveBeenCalled();
     });
   });
 

@@ -3,10 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import { CookieOptions, Request, Response } from 'express';
 import { Public } from '../../common/auth/decorators';
+import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
 import { Env } from '../../infra/config/env.schema';
 import { UserProfile } from '../users/users.service';
 import { AuthService, AuthSession } from './auth.service';
-import { LoginDto, RegisterDto } from './dto/auth.dto';
+import { LoginDto, RegisterDto, SendOtpDto, VerifyOtpDto } from './dto/auth.dto';
+import { OtpService } from './otp.service';
 
 export const REFRESH_COOKIE = 'sf_refresh';
 
@@ -28,12 +30,14 @@ export class AuthController {
 
   constructor(
     private readonly auth: AuthService,
+    private readonly otp: OtpService,
     config: ConfigService<Env, true>,
   ) {
     this.secureCookie = config.get('NODE_ENV', { infer: true }) === 'production';
   }
 
   @Post('register')
+  @RateLimit('register')
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
@@ -43,11 +47,29 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @RateLimit('login')
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionResponse> {
     return this.respond(res, await this.auth.login(dto));
+  }
+
+  /** Always 202 with the same message: the response does not reveal whether the email exists. */
+  @Post('otp/send')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimit('otpPerTarget', 'otpPerTargetHourly', 'otpPerIp')
+  async sendOtp(@Body() dto: SendOtpDto): Promise<{ message: string }> {
+    await this.otp.send(dto.email);
+    return { message: 'Nếu email hợp lệ, mã xác thực đã được gửi và có hiệu lực trong 5 phút.' };
+  }
+
+  @Post('otp/verify')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit('otpPerIp')
+  async verifyOtp(@Body() dto: VerifyOtpDto): Promise<{ verified: true }> {
+    await this.otp.verify(dto.email, dto.code);
+    return { verified: true };
   }
 
   /** 200 with a new session; 204 when the browser has no session cookie (a guest, not an error). */

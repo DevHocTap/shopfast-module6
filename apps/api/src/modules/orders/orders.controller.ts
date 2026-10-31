@@ -17,8 +17,9 @@ import { Response } from 'express';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import { Role } from '../../common/auth/role.enum';
+import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
 import { Paginated, PaginationQueryDto } from '../../common/dto/pagination.dto';
-import { ChangeOrderStatusDto, StaffOrderQueryDto } from './dto/orders.dto';
+import { ChangeOrderStatusDto, PlaceOrderDto, StaffOrderQueryDto } from './dto/orders.dto';
 import { OrderDetail, OrderSummary } from './orders.repository';
 import { OrdersService } from './orders.service';
 
@@ -30,13 +31,15 @@ export class OrdersController {
 
   /** 201 for a new order; 200 + `Idempotent-Replayed: true` when the key was already used. */
   @Post()
+  @RateLimit('promoOrder')
   @ApiHeader({ name: 'Idempotency-Key', required: true, description: '8–64 ký tự, ví dụ UUID' })
   async place(
     @CurrentUser() user: AuthUser,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() dto: PlaceOrderDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<OrderDetail> {
-    const { order, replayed } = await this.orders.placeOrder(user, idempotencyKey);
+    const { order, replayed } = await this.orders.placeOrder(user, idempotencyKey, dto.voucherCode);
     if (replayed) {
       res.status(HttpStatus.OK).setHeader('Idempotent-Replayed', 'true');
     }

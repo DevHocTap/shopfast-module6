@@ -32,6 +32,14 @@ export const OrderErrors = {
       'STALE_ORDER',
       'Đơn hàng vừa được người khác cập nhật. Vui lòng tải lại để xem trạng thái mới nhất.',
     ),
+  voucherInvalid: (code: string) =>
+    new AppError(
+      HttpStatus.CONFLICT,
+      'VOUCHER_INVALID',
+      `Mã giảm giá "${code}" không hợp lệ, đã hết hạn hoặc đã hết lượt sử dụng.`,
+    ),
+  voucherUsed: () =>
+    new AppError(HttpStatus.CONFLICT, 'VOUCHER_ALREADY_USED', 'Bạn đã dùng mã giảm giá này rồi.'),
   missingIdempotencyKey: () =>
     new AppError(
       HttpStatus.BAD_REQUEST,

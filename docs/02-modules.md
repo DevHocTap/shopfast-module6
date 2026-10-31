@@ -132,7 +132,8 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
 - **Bất biến:** `jobId = daily-revenue:{yyyy-mm-dd}`; upsert theo `report_date`.
 
 ### C.13 `rate-limit` — F03
-- **Trách nhiệm:** cấu hình throttler, guard, xử lý 429, chống dò mật khẩu.
+- **Trách nhiệm:** guard toàn cục, bộ đếm Redis (`CounterStore`), xử lý 429, chống dò mật khẩu (`LoginAttempts`). Không dùng `@nestjs/throttler`, lý do ở ADR-14.
+- **Đã làm (Giai đoạn 2):** các chính sách ở `src/common/rate-limit/policies.ts`; endpoint gắn thêm chính sách bằng `@RateLimit(...)`; health dùng `@SkipRateLimit()`; tắt toàn bộ bằng `RATE_LIMIT_ENABLED=false` (chỉ dùng khi đo tải).
 - **Hạn mức (đề xuất — chỉnh khi đo tải):**
 
   | Tên | Áp dụng | Giới hạn | Khoá đếm |

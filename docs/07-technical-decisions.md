@@ -65,6 +65,16 @@ Tiêu chí "Bảo vệ quyết định kỹ thuật" là **điều kiện bắt 
 - **Quyết định:** build image trên runner của GitHub, đẩy lên GHCR bằng `GITHUB_TOKEN` (tự cấp cho từng job, hết hạn khi job xong). Job deploy/rollback chạy trên **self-hosted runner cài tại EC2**, dùng instance role cho mọi lệnh AWS. Runner chỉ mở kết nối ra ngoài tới GitHub — không mở thêm cổng.
 - **Đánh đổi:** runner có quyền Docker trên máy production (tương đương root), nên ai chạy được workflow trên nó là chạy được lệnh trên máy. Giảm rủi ro: chỉ `deploy.yml` (kích hoạt bởi push `main` hoặc người có quyền ghi) nhắm nhãn `shopfast-prod`; repo bật **"Require approval for all external contributors"** để PR từ fork không tự chạy; `main` được bảo vệ. Token đăng ký runner dùng một lần và hết hạn sau 1 giờ.
 
+### ADR-14 — Rate limit tự viết thay vì `@nestjs/throttler`
+- **Bối cảnh:** SRS cần (1) một hạn mức chung cho *toàn bộ* API mỗi user/IP, (2) hạn mức riêng chặt hơn cho login, OTP, đơn khuyến mãi, (3) khoá theo tài khoản bị nhắm tới, (4) 429 tiếng Việt, và theo yêu cầu độ tin cậy, (5) vẫn hoạt động khi Redis chết.
+- **Quyết định:** guard toàn cục đặt sau `JwtAuthGuard` (nên biết user là ai), chính sách khai báo một chỗ (`policies.ts`). Bộ đếm cửa sổ cố định dùng một script Lua (INCR + PEXPIRE nguyên tử) trên Redis. Khi Redis lỗi, chuyển sang bộ đếm trong bộ nhớ của từng tiến trình.
+- **Đánh đổi:** `@nestjs/throttler` đếm theo từng route (không có "toàn API") và không có dự phòng, tuỳ biến đủ các ý trên cũng tốn công gần bằng tự viết. Cửa sổ cố định có thể cho qua tối đa khoảng 2× hạn mức ở ranh giới hai cửa sổ; chấp nhận được vì mục tiêu là chặn lạm dụng, không phải tính tiền. Khi dùng bộ nhớ, hạn mức thành theo từng tiến trình (lỏng hơn) nhưng không bao giờ tắt hẳn.
+
+### ADR-15 — Tách cache thông tin/giá khỏi cache tồn kho
+- **Bối cảnh:** F04 đòi "giá hoặc tồn kho đổi thì bản ghi đệm liên quan phải làm mới ngay", đồng thời tỉ lệ trúng ≥ 80%. Tồn kho đổi sau *mỗi* đơn hàng; nếu xoá cả trang danh sách mỗi lần như vậy, tỉ lệ trúng sẽ rất thấp.
+- **Quyết định:** `product:{id}` và `catalog:list:v{n}:{hash}` chỉ chứa dữ liệu ít đổi (tên, giá, phân loại), TTL 5–10 phút. Đổi giá thì xoá `product:{id}` và tăng `version:catalog`, khiến mọi khoá danh sách cũ không còn ai đọc tới. Tồn kho lưu riêng ở `stock:{id}` (TTL 60 giây), đọc hàng loạt bằng `MGET`, và bị xoá ngay **sau khi commit** đặt hàng, huỷ đơn hoặc kiểm kê. Mọi lần xoá đều xoá lần hai sau 500 ms, để đuổi giá trị cũ do một request đọc chạy chen ghi lại.
+- **Đánh đổi:** mỗi lần đọc danh sách tốn 3 lượt gọi Redis (version, danh sách, `MGET` tồn kho) thay vì 1. Đổi lại, đo được tỉ lệ trúng 99,6% với khoảng 1.200 request/giây ([báo cáo tải](reports/load-test-local-2026-10-31.md)). Lúc đặt hàng vẫn đọc giá và tồn kho từ DB, nên cache có trễ thì khách cũng không bao giờ bị tính sai.
+
 ### ADR-11 — Trợ lý AI chỉ được "đề xuất", con người "thực thi"
 - **Bối cảnh:** LLM có thể sai hoặc bị prompt injection; SRS bắt buộc người xác nhận thao tác ghi.
 - **Quyết định:** không có tool ghi; `propose_action` chỉ tạo bản ghi; thực thi bằng endpoint riêng, danh tính nhân viên, có audit.
@@ -74,6 +84,7 @@ Tiêu chí "Bảo vệ quyết định kỹ thuật" là **điều kiện bắt 
 
 | Câu hỏi | Trả lời ngắn |
 |---------|--------------|
+| Redis chậm/chết thì mỗi request có phải đợi timeout không? | Không. Lệnh Redis có timeout 200 ms; sau 5 lỗi liên tiếp, circuit breaker mở và mọi request bỏ qua Redis ngay trong 10 giây, rồi thử lại một lần (half-open). |
 | Redis chết giữa buổi demo? | Cache fail-open (breaker mở, đọc DB, chậm hơn); rate limit chuyển bộ đếm trong bộ nhớ; đơn vẫn đặt được vì sự kiện nằm trong outbox; `/health/ready` báo `degraded`. Redis sống lại → breaker đóng sau 10 s, relay đẩy job tồn. |
 | PostgreSQL chết? | Đây là phụ thuộc bắt buộc: `/health/ready` 503, Nginx trả trang lỗi thân thiện. Container có `restart: unless-stopped`. Mất dữ liệu đĩa → khôi phục từ S3 theo runbook (RTO đã đo). |
 | Deploy bản lỗi? | Health check của màu mới không đạt → traffic không bao giờ chuyển. Lỗi chỉ lộ sau khi chuyển → smoke test bắt được → `rollback.sh` trỏ lại màu cũ trong vài giây. |

@@ -1,10 +1,11 @@
 import { Role } from '../../common/auth/role.enum';
 import { TransactionRunner } from '../../infra/database/transaction-runner';
 import { CartLine, CartRepository } from '../cart/cart.repository';
+import { ProductCache } from '../catalog/product-cache';
 import { InventoryRepository } from '../inventory/inventory.repository';
 import { OrderStatus } from './order-state-machine';
 import { OrderDetail, OrderHead, OrdersRepository } from './orders.repository';
-import { generateOrderCode, OrdersService } from './orders.service';
+import { generateOrderCode, OrdersService, voucherDiscount } from './orders.service';
 
 const customer = { id: 'u1', email: 'an@example.com', role: Role.CUSTOMER };
 const warehouse = { id: 'w1', email: 'kho@example.com', role: Role.WAREHOUSE };
@@ -44,6 +45,8 @@ function setup() {
     insertPayment: jest.fn(),
     detail: jest.fn().mockResolvedValue(detail),
     list: jest.fn().mockResolvedValue({ rows: [], total: 0 }),
+    claimVoucher: jest.fn(),
+    insertRedemption: jest.fn(),
   };
   const inventory = {
     reserve: jest.fn().mockResolvedValue(true),
@@ -52,13 +55,15 @@ function setup() {
   };
   const cart = { lines: jest.fn().mockResolvedValue([line()]), clear: jest.fn() };
   const tx = { run: jest.fn((work: (t: unknown) => Promise<unknown>) => work(TX)) };
+  const productCache = { stockChanged: jest.fn() };
   const service = new OrdersService(
     orders as unknown as OrdersRepository,
     inventory as unknown as InventoryRepository,
     cart as unknown as CartRepository,
     tx as unknown as TransactionRunner,
+    productCache as unknown as ProductCache,
   );
-  return { service, orders, inventory, cart, tx, detail };
+  return { service, orders, inventory, cart, tx, detail, productCache };
 }
 
 describe('OrdersService.placeOrder', () => {
@@ -152,6 +157,72 @@ describe('OrdersService.placeOrder', () => {
   });
 });
 
+describe('OrdersService vouchers and cache', () => {
+  it('applies a voucher: claims one use, discounts the total, records the redemption', async () => {
+    const { service, orders } = setup();
+    orders.claimVoucher.mockResolvedValue(10);
+
+    await service.placeOrder(customer, ATTEMPT, 'SALE10');
+
+    expect(orders.claimVoucher).toHaveBeenCalledWith(TX, 'SALE10');
+    expect(orders.insertOrder).toHaveBeenCalledWith(
+      TX,
+      expect.objectContaining({
+        subtotal: 200_000,
+        discount: 20_000,
+        total: 180_000,
+        voucherCode: 'SALE10',
+      }),
+    );
+    expect(orders.insertRedemption).toHaveBeenCalledWith(TX, 'SALE10', 'u1', 'o1');
+  });
+
+  it('rejects an invalid or exhausted voucher', async () => {
+    const { service, orders } = setup();
+    orders.claimVoucher.mockResolvedValue(null);
+
+    await expect(service.placeOrder(customer, ATTEMPT, 'NOPE')).rejects.toMatchObject({
+      response: { code: 'VOUCHER_INVALID' },
+    });
+    expect(orders.insertOrder).not.toHaveBeenCalled();
+  });
+
+  it('maps a second use of the same voucher to VOUCHER_ALREADY_USED', async () => {
+    const { service, tx } = setup();
+    tx.run.mockRejectedValue({
+      driverError: { code: '23505', constraint: 'voucher_redemptions_one_per_user' },
+    });
+
+    await expect(service.placeOrder(customer, ATTEMPT, 'SALE10')).rejects.toMatchObject({
+      response: { code: 'VOUCHER_ALREADY_USED' },
+    });
+  });
+
+  it('drops the stock cache of ordered products only after the commit', async () => {
+    const { service, productCache, tx } = setup();
+
+    await service.placeOrder(customer, ATTEMPT);
+
+    expect(productCache.stockChanged).toHaveBeenCalledWith(['p1']);
+    expect(productCache.stockChanged.mock.invocationCallOrder[0]).toBeGreaterThan(
+      tx.run.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not touch the cache when the order fails', async () => {
+    const { service, inventory, productCache } = setup();
+    inventory.reserve.mockResolvedValue(false);
+
+    await expect(service.placeOrder(customer, ATTEMPT)).rejects.toBeDefined();
+    expect(productCache.stockChanged).not.toHaveBeenCalled();
+  });
+
+  it('rounds the discount down to 1,000 VND', () => {
+    expect(voucherDiscount(1_234_567, 10)).toBe(123_000);
+    expect(voucherDiscount(999, 50)).toBe(0);
+  });
+});
+
 describe('OrdersService status changes', () => {
   it('pays a pending order once', async () => {
     const { service, orders } = setup();
@@ -183,7 +254,7 @@ describe('OrdersService status changes', () => {
   });
 
   it('returns stock to inventory when an order is cancelled', async () => {
-    const { service, orders, inventory } = setup();
+    const { service, orders, inventory, productCache } = setup();
     orders.lock.mockResolvedValue(head({ status: OrderStatus.PAID }));
 
     await service.cancelByCustomer(customer, 'o1');
@@ -199,6 +270,7 @@ describe('OrdersService status changes', () => {
       OrderStatus.CANCELLED,
       'u1',
     );
+    expect(productCache.stockChanged).toHaveBeenCalledWith(['p1']);
   });
 
   it('does not let a customer cancel once packing started', async () => {

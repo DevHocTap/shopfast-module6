@@ -37,8 +37,11 @@ export default tseslint.config(
     rules: { 'no-restricted-properties': 'off' },
   },
   {
-    files: ['**/*.spec.ts', 'test/**/*.ts'],
+    // Test doubles: async mocks without await and loosely typed fakes are fine here.
+    files: ['**/*.spec.ts', 'test/**/*.ts', 'src/**/testing/**/*.ts'],
     rules: {
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/unbound-method': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',

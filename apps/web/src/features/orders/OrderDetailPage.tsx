@@ -161,7 +161,7 @@ export function OrderDetailPage() {
             </div>
             {order.discount > 0 && (
               <div className="flex justify-between text-muted">
-                <dt>Giảm giá</dt>
+                <dt>Giảm giá{order.voucherCode ? ` (${order.voucherCode})` : ''}</dt>
                 <dd className="tabular-nums">−{formatVND(order.discount)}</dd>
               </div>
             )}
