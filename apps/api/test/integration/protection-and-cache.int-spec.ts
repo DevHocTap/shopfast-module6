@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DataSource } from 'typeorm';
+import { SECOND_DELETE_DELAY_MS } from '../../src/infra/cache/cache.service';
 import { createTestApp, httpClient, HttpClient, resetDatabase } from '../utils/test-app';
 
 /** F03 (rate limiting, brute force, OTP) and F04 (cache + invalidation) against real PG + Redis. */
@@ -70,7 +71,8 @@ describe('Protection and cache (integration: real PostgreSQL + Redis)', () => {
 
       expect(res.headers['retry-after']).toMatch(/^\d+$/);
       expect(res.body).toMatchObject({ code: 'TOO_MANY_REQUESTS', details: { policy: 'login' } });
-      expect(res.body.message).toMatch(/Vui lòng thử lại sau \d+ giây/);
+      // A full 60 s window reads as "1 phút", shorter waits as "N giây".
+      expect(res.body.message).toMatch(/Vui lòng thử lại sau \d+ (giây|phút)/);
     });
 
     it('locks the TARGET account after 5 wrong passwords even when every attempt comes from a new IP', async () => {
@@ -179,6 +181,8 @@ describe('Protection and cache (integration: real PostgreSQL + Redis)', () => {
     });
 
     it('shows the new stock right after an order while the product itself stays cached', async () => {
+      // Let the delayed second delete scheduled by the previous test's price update fire first.
+      await new Promise((resolve) => setTimeout(resolve, SECOND_DELETE_DELAY_MS + 100));
       const before = await http.get(`/api/products/${ids.product}`).expect(200);
       const { token } = await register();
       await http

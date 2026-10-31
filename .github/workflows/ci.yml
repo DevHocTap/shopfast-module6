@@ -37,7 +37,7 @@ jobs:
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       # Fails when business-layer coverage drops below 60% (jest coverageThreshold).
-      - run: pnpm test:cov
+      - run: pnpm --filter api exec jest --coverage --reporters=default --reporters=github-actions
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -83,7 +83,7 @@ jobs:
         run: |
           pnpm --filter api build
           node apps/api/dist/infra/database/migrate.js
-      - run: pnpm test:int
+      - run: pnpm --filter api exec jest --config jest.integration.config.ts --runInBand --reporters=default --reporters=github-actions
 
   secrets-scan:
     name: Secret scan (gitleaks)
