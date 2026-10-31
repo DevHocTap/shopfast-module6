@@ -1,0 +1,114 @@
+# Production stack on EC2. Always run through deploy.sh, which provides the interpolation file:
+#   docker compose -p shopfast --env-file $SHARED_DIR/deploy.env -f docker-compose.prod.yml ...
+#
+# deploy.env (non-secret): ECR_REGISTRY, SHARED_DIR, API_BLUE_TAG, API_GREEN_TAG, WORKER_TAG
+# $SHARED_DIR/.env (secrets, chmod 600): rendered from SSM Parameter Store by render-env.sh
+#
+# Only nginx publishes ports. PostgreSQL / Redis / api / worker are reachable inside Docker networks only.
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: '20m', max-file: '5' }
+
+x-api: &api
+  env_file: ${SHARED_DIR}/.env
+  environment:
+    NODE_ENV: production
+    PORT: '3000'
+    DB_HOST: postgres
+    DB_USER: shopfast
+    DB_NAME: shopfast
+    REDIS_HOST: redis
+  networks: [edge, backend]
+  restart: unless-stopped
+  stop_grace_period: 30s
+  logging: *logging
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: shopfast-nginx
+    ports: ['80:80', '443:443']
+    volumes:
+      - ${SHARED_DIR}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${SHARED_DIR}/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ${SHARED_DIR}/nginx/upstream.d:/etc/nginx/upstream.d:ro
+      - ${SHARED_DIR}/web:/srv/web:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    networks: [edge]
+    restart: unless-stopped
+    logging: *logging
+
+  api-blue:
+    <<: *api
+    image: ${ECR_REGISTRY}/shopfast/api:${API_BLUE_TAG}
+    container_name: shopfast-api-blue
+
+  api-green:
+    <<: *api
+    image: ${ECR_REGISTRY}/shopfast/api:${API_GREEN_TAG}
+    container_name: shopfast-api-green
+
+  worker:
+    <<: *api
+    image: ${ECR_REGISTRY}/shopfast/api:${WORKER_TAG}
+    container_name: shopfast-worker
+    command: ['node', 'dist/worker.js']
+    networks: [backend, egress]
+    healthcheck:
+      test: ['CMD-SHELL', 'test $$(( $$(date +%s) - $$(stat -c %Y /tmp/worker-heartbeat) )) -lt 30']
+      interval: 15s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: shopfast-postgres
+    # Separate file: adding an app secret must not change (and recreate) the data stores.
+    env_file: ${SHARED_DIR}/datastore.env # POSTGRES_PASSWORD, APP_DB_PASSWORD
+    environment:
+      POSTGRES_USER: postgres
+      APP_DB_USER: shopfast
+      APP_DB_NAME: shopfast
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ${SHARED_DIR}/postgres-init:/docker-entrypoint-initdb.d:ro
+    networks: [backend]
+    restart: unless-stopped
+    shm_size: 256mb
+    logging: *logging
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d shopfast']
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: shopfast-redis
+    env_file: ${SHARED_DIR}/datastore.env # REDIS_PASSWORD
+    command:
+      [
+        'sh',
+        '-c',
+        'exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction',
+      ]
+    volumes: [redisdata:/data]
+    networks: [backend]
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ['CMD-SHELL', 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 5s
+      retries: 20
+
+networks:
+  edge: {} # nginx <-> api, also gives api outbound Internet (LLM API)
+  backend:
+    internal: true # no route to the Internet; data stores live only here
+  egress: {} # outbound Internet for the worker (SES, partner API)
+
+volumes:
+  pgdata:
+  redisdata:

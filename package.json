@@ -1,0 +1,27 @@
+{
+  "name": "shopfast",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter api start:dev",
+    "dev:worker": "pnpm --filter api start:worker:dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm --filter api test",
+    "test:cov": "pnpm --filter api test:cov",
+    "test:int": "pnpm --filter api test:int",
+    "db:migrate": "pnpm --filter api migration:run",
+    "infra:up": "docker compose -f infra/compose/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/compose/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}

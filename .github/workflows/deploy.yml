@@ -1,0 +1,128 @@
+name: Deploy
+
+# Runs only after CI succeeded on a push to main, or manually to redeploy a given commit.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit SHA to deploy (default = current main)
+        required: false
+
+# OIDC: GitHub issues a short-lived token, AWS exchanges it for temporary credentials.
+# No AWS access key is stored anywhere.
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+  INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+  ARTIFACTS_BUCKET: ${{ vars.ARTIFACTS_BUCKET }}
+  APP_URL: https://${{ vars.APP_DOMAIN }}
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ env.APP_URL }}
+    timeout-minutes: 15
+    env:
+      SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ env.SHA }}' }
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check whether images already exist (immutable tags)
+        id: exists
+        run: |
+          for image in api web; do
+            if aws ecr describe-images --repository-name "shopfast/$image" --image-ids imageTag="$SHA" > /dev/null 2>&1; then
+              echo "$image=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$image=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build & push api:${{ env.SHA }}
+        if: steps.exists.outputs.api != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/api.Dockerfile
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/shopfast/api:${{ env.SHA }}
+          build-args: APP_VERSION=${{ env.SHA }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Build & push web:${{ env.SHA }}
+        if: steps.exists.outputs.web != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/shopfast/web:${{ env.SHA }}
+          build-args: APP_VERSION=${{ env.SHA }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: Upload infra bundle (compose, nginx, scripts)
+        run: |
+          chmod +x infra/scripts/*.sh infra/postgres/init/*.sh
+          tar czf infra.tar.gz -C infra compose nginx scripts postgres
+          aws s3 cp --only-show-errors infra.tar.gz "s3://$ARTIFACTS_BUCKET/releases/$SHA/infra.tar.gz"
+
+      - name: Deploy on EC2 (SSM Run Command)
+        run: |
+          bash .github/scripts/ssm-run.sh "set -euo pipefail
+          mkdir -p /opt/shopfast/releases/$SHA
+          aws s3 cp --only-show-errors s3://$ARTIFACTS_BUCKET/releases/$SHA/infra.tar.gz - | tar xz -C /opt/shopfast/releases/$SHA
+          /opt/shopfast/releases/$SHA/scripts/deploy.sh $SHA"
+
+      - name: Smoke test through HTTPS
+        id: smoke
+        run: |
+          for attempt in $(seq 1 10); do
+            live=$(curl -fsS "$APP_URL/api/health/live" || true)
+            ready_code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/api/health/ready" || true)
+            home_code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/" || true)
+            echo "attempt $attempt: live=$live ready=$ready_code home=$home_code"
+            if echo "$live" | grep -q "\"version\":\"$SHA\"" && [ "$ready_code" = 200 ] && [ "$home_code" = 200 ]; then
+              echo "Smoke test passed"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::Smoke test failed for $SHA"
+          exit 1
+
+      - name: Roll back
+        if: failure() && steps.smoke.outcome == 'failure'
+        run: |
+          bash .github/scripts/ssm-run.sh "/opt/shopfast/current/scripts/rollback.sh"
+          echo "::error::Deployment of $SHA failed the smoke test and was rolled back"
+          exit 1

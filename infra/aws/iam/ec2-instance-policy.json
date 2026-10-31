@@ -1,0 +1,50 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EcrPull",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadOwnSecrets",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParametersByPath", "ssm:GetParameters", "ssm:GetParameter"],
+      "Resource": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/shopfast/prod*"
+    },
+    {
+      "Sid": "ReadInfraBundles",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::shopfast-artifacts-<ACCOUNT_ID>/releases/*"
+    },
+    {
+      "Sid": "WriteBackupsNoDelete",
+      "Effect": "Allow",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::shopfast-backups-<ACCOUNT_ID>/daily/*"
+    },
+    {
+      "Sid": "ReadBackupsForRestoreDrill",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::shopfast-backups-<ACCOUNT_ID>",
+        "arn:aws:s3:::shopfast-backups-<ACCOUNT_ID>/daily/*"
+      ]
+    },
+    {
+      "Sid": "BackupMetric",
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*",
+      "Condition": { "StringEquals": { "cloudwatch:namespace": "ShopFast" } }
+    }
+  ]
+}

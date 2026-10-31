@@ -1,0 +1,65 @@
+# Local development dependencies. Ports are bound to 127.0.0.1 only.
+# Port already taken by another project? PG_PORT=5433 pnpm infra:up (and DB_PORT=5433 in apps/api/.env).
+#   pnpm infra:up                                  → postgres, redis, mailpit
+#   docker compose -f infra/compose/docker-compose.yml --profile app up --build
+#                                                  → also api + worker built from the Dockerfile
+name: shopfast-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      APP_DB_USER: shopfast
+      APP_DB_PASSWORD: shopfast
+      APP_DB_NAME: shopfast
+    ports: ['127.0.0.1:${PG_PORT:-5432}:5432']
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d shopfast']
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports: ['127.0.0.1:${REDIS_PORT:-6379}:6379']
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports: ['127.0.0.1:8025:8025', '127.0.0.1:1025:1025']
+
+  api:
+    profiles: [app]
+    build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
+    env_file: [{ path: ../../apps/api/.env, required: false }]
+    environment: { DB_HOST: postgres, REDIS_HOST: redis, NODE_ENV: production }
+    ports: ['127.0.0.1:3000:3000']
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    profiles: [app]
+    build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
+    command: ['node', 'dist/worker.js']
+    env_file: [{ path: ../../apps/api/.env, required: false }]
+    environment: { DB_HOST: postgres, REDIS_HOST: redis, NODE_ENV: production }
+    healthcheck:
+      test: ['CMD-SHELL', 'test $$(( $$(date +%s) - $$(stat -c %Y /tmp/worker-heartbeat) )) -lt 30']
+      interval: 15s
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  redisdata:
