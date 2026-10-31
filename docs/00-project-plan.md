@@ -29,8 +29,8 @@ Mỗi giai đoạn kết thúc bằng một **PR được merge và tự triển
 - Monorepo pnpm (`apps/api`, `apps/web`), ESLint + Prettier, Husky pre-commit, tsconfig strict.
 - NestJS 10: `ConfigModule` có kiểm tra biến môi trường, logger `nestjs-pino`, `HealthModule` (DB + Redis).
 - Dockerfile multi-stage cho `api`, `web` (Nginx phục vụ bản build tĩnh); `docker-compose.yml` cho máy cục bộ.
-- AWS: tài khoản theo chuẩn S07 (IAM group + MFA), EC2 + Security Group, Elastic IP, tên miền + Let's Encrypt, ECR, S3 backup, SSM Parameter Store.
-- GitHub: branch protection trên `main`, OIDC role cho GitHub Actions, workflow `ci.yml` + `deploy.yml` (blue/green + rollback).
+- AWS: tài khoản theo chuẩn S07 (IAM group + MFA), EC2 + Security Group, Elastic IP, tên miền + Let's Encrypt, S3 backup, SSM Parameter Store.
+- GitHub: branch protection trên `main`, self-hosted runner trên EC2 (OIDC bị SCP của lớp chặn), workflow `ci.yml` + `deploy.yml` (blue/green + rollback).
 
 **Định nghĩa hoàn thành:** `https://<domain>/api/health` trả `ok` cho cả DB và Redis; một commit vào `main` tự lên production trong < 10 phút; cố tình làm hỏng health check → tự quay lui.
 

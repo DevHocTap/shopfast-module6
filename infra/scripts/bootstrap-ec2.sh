@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # One-time preparation of a fresh Amazon Linux 2023 instance. Run as root (SSM Session Manager):
 #
-#   sudo DOMAIN=shopfast.example.com ADMIN_EMAIL=you@example.com AWS_REGION=ap-southeast-2 \
-#        ECR_REGISTRY=464986173621.dkr.ecr.ap-southeast-2.amazonaws.com \
-#        ARTIFACTS_BUCKET=shopfast-artifacts-464986173621 BACKUP_BUCKET=shopfast-backups-464986173621 \
+#   sudo DOMAIN=shopfast.hmicodev.io.vn ADMIN_EMAIL=you@example.com AWS_REGION=ap-southeast-2 \
+#        IMAGE_REGISTRY=ghcr.io/devhoctap/shopfast-module6 \
+#        BACKUP_BUCKET=shopfast-backups-464986173621 \
 #        bash bootstrap-ec2.sh
 #
-# Afterwards: run init-letsencrypt.sh once, then trigger the first deploy from GitHub Actions.
+# Afterwards: init-letsencrypt.sh (TLS), setup-runner.sh (GitHub runner), then the first deploy.
 set -euo pipefail
 
-: "${DOMAIN:?}" "${ADMIN_EMAIL:?}" "${AWS_REGION:?}" "${ECR_REGISTRY:?}" "${ARTIFACTS_BUCKET:?}" "${BACKUP_BUCKET:?}"
+: "${DOMAIN:?}" "${ADMIN_EMAIL:?}" "${AWS_REGION:?}" "${IMAGE_REGISTRY:?}" "${BACKUP_BUCKET:?}"
 SSM_PREFIX="${SSM_PREFIX:-/shopfast/prod}"
 COMPOSE_VERSION="${COMPOSE_VERSION:-v2.32.1}"
 
-echo "Installing Docker, Compose, cron"
-dnf install -y docker cronie jq
+echo "Installing Docker, Compose, cron, runner dependencies"
+dnf install -y docker cronie jq git libicu tar
 systemctl enable --now docker crond
 mkdir -p /usr/local/lib/docker/cli-plugins
 curl -fsSL "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-$(uname -m)" \
@@ -35,8 +35,7 @@ cat > /opt/shopfast/host.env <<EOF
 DOMAIN=$DOMAIN
 ADMIN_EMAIL=$ADMIN_EMAIL
 AWS_REGION=$AWS_REGION
-ECR_REGISTRY=$ECR_REGISTRY
-ARTIFACTS_BUCKET=$ARTIFACTS_BUCKET
+IMAGE_REGISTRY=$IMAGE_REGISTRY
 BACKUP_BUCKET=$BACKUP_BUCKET
 SSM_PREFIX=$SSM_PREFIX
 EOF
@@ -50,4 +49,4 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 17 3 * * * root /opt/shopfast/current/scripts/renew-cert.sh >> /var/log/shopfast-certbot.log 2>&1
 EOF
 
-echo "Done. Next: init-letsencrypt.sh, then the first deploy."
+echo "Done. Next: init-letsencrypt.sh, setup-runner.sh, then the first deploy."

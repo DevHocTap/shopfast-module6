@@ -19,7 +19,7 @@ STATE_DIR="$SHARED/state"
 DEPLOY_ENV="$SHARED/deploy.env"
 
 # shellcheck source=/dev/null
-source "$ROOT/host.env" # AWS_REGION, ECR_REGISTRY, DOMAIN, ARTIFACTS_BUCKET, BACKUP_BUCKET, SSM_PREFIX, ADMIN_EMAIL
+source "$ROOT/host.env" # AWS_REGION, IMAGE_REGISTRY, DOMAIN, BACKUP_BUCKET, SSM_PREFIX, ADMIN_EMAIL
 
 log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 die() { log "ERROR: $*"; exit 1; }
@@ -27,12 +27,6 @@ die() { log "ERROR: $*"; exit 1; }
 compose() {
   local file="${COMPOSE_FILE_OVERRIDE:-$ROOT/current/compose/docker-compose.prod.yml}"
   docker compose -p shopfast --env-file "$DEPLOY_ENV" -f "$file" "$@"
-}
-
-ecr_login() {
-  # Short-lived token obtained with the instance role — no stored registry password.
-  aws ecr get-login-password --region "$AWS_REGION" |
-    docker login --username AWS --password-stdin "$ECR_REGISTRY" > /dev/null
 }
 
 read_state() { cat "$STATE_DIR/$1" 2>/dev/null || echo none; }
@@ -88,7 +82,7 @@ switch_upstream() {
 publish_web() {
   local sha="$1" dir="$SHARED/web/releases/$1" cid
   if [ ! -d "$dir" ]; then
-    cid=$(docker create "$ECR_REGISTRY/shopfast/web:$sha")
+    cid=$(docker create "$IMAGE_REGISTRY/web:$sha")
     mkdir -p "$dir"
     docker cp "$cid:/usr/share/nginx/html/." "$dir/"
     docker rm "$cid" > /dev/null

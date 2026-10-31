@@ -31,14 +31,14 @@ shopfast/
 │   │   ├── bootstrap-ec2.sh      # chuẩn bị EC2 mới (Docker, cron, swap, thư mục)
 │   │   └── init-letsencrypt.sh, renew-cert.sh
 │   └── aws/
-│       ├── iam/                  # JSON policy: gha-deploy-role, ec2-instance-role, trust policy OIDC
+│       ├── iam/                  # JSON policy của instance role shopfast-ec2
 │       └── README.md             # các bước dựng hạ tầng (hoặc Terraform nếu còn thời gian)
 ├── tests/
 │   └── load/                     # k6: catalog.js, place-order.js, login-bruteforce.js
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                # pull_request: lint, typecheck, unit, integration, coverage, gitleaks
-│   │   └── deploy.yml            # push main: build → ECR → SSM deploy → smoke → rollback
+│   │   └── deploy.yml            # sau CI xanh: build → GHCR → deploy (runner EC2) → smoke → rollback
 │   └── pull_request_template.md
 ├── docs/                         # tài liệu này + runbooks/ + adr/
 ├── apps/api/.env.example         # biến môi trường cục bộ, KHÔNG có secret thật

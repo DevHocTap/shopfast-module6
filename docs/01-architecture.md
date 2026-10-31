@@ -34,7 +34,6 @@ flowchart LR
         end
       end
     end
-    ecr[ECR<br/>api, web]
     ssm[SSM Parameter Store<br/>SecureString]
     s3[(S3 shopfast-backups<br/>versioning + SSE)]
     ses[SES<br/>email]
@@ -51,12 +50,13 @@ flowchart LR
   worker --> ses
   worker --> llm[(LLM API)]
   apiB --> llm
-  ec2 -->|instance role| ecr
   ec2 -->|instance role| ssm
   ec2 -->|backup hằng đêm| s3
 
-  gh[GitHub Actions] -->|OIDC AssumeRole| ecr
-  gh -->|ssm:SendCommand| ec2
+  gh[GitHub Actions<br/>build job] -->|GITHUB_TOKEN tạm| ghcr[(GHCR<br/>api, web)]
+  runner[self-hosted runner<br/>trên EC2] -->|kéo job HTTPS ra ngoài| gh
+  runner -->|docker pull| ghcr
+  runner --> nginx
 ```
 
 **Mạng & cổng:**
@@ -87,9 +87,9 @@ Docker Compose production chia 2 network: `edge` (nginx ↔ api) và `backend` (
 | Email | SES (prod), Mailpit (local) | SES dùng IAM role của EC2 → không cần khoá SMTP dài hạn | Gmail SMTP (cần mật khẩu ứng dụng = khoá dài hạn) |
 | Reverse proxy | Nginx + Let's Encrypt (certbot) | TLS, HTTP→HTTPS, upgrade WebSocket, chuyển upstream blue/green bằng reload không rớt kết nối | ALB (tốn phí, cần ≥ 2 AZ) |
 | Hạ tầng chạy | 1 EC2 t3.medium + Docker Compose | SRS chỉ định; đủ RAM (4 GB) cho 2 bản api lúc chuyển + PG + Redis | ECS/EKS (quá tầm), RDS (khuyến nghị khi mở rộng) |
-| Registry | ECR | Pull bằng instance role, không cần `docker login` bằng mật khẩu | Docker Hub (cần token) |
+| Registry | GitHub Container Registry (GHCR) | Đăng nhập bằng `GITHUB_TOKEN` tự cấp cho từng job, hết hạn khi job xong | ECR (cần quyền AWS từ GitHub — OIDC bị chặn, ADR-13) |
 | Secrets | SSM Parameter Store (SecureString) | Miễn phí, mã hoá KMS, đọc bằng IAM role | Secrets Manager (tốn phí, xoay vòng tự động không cần ở đây) |
-| CI/CD | GitHub Actions + OIDC + SSM Run Command | Không lưu khoá AWS trên GitHub; không cần mở SSH cho CI | SSH key trong GitHub secrets (vi phạm "không khoá dài hạn") |
+| CI/CD | GitHub Actions: build trên runner GitHub, deploy trên self-hosted runner đặt tại EC2 | Không có khoá AWS nào trên GitHub; runner chỉ mở kết nối ra ngoài, không cần mở thêm cổng | OIDC + SSM (bị SCP chặn), access key IAM user hoặc SSH key trong GitHub secrets (vi phạm "không khoá dài hạn") |
 | Web | React 18 + Vite + TypeScript, Tailwind + shadcn/ui | Build ra file tĩnh, Nginx phục vụ trực tiếp, không cần thêm container Node | Next.js (thêm server SSR không cần thiết) |
 
 ## 4. Kiến trúc phân tầng bên trong một module
@@ -237,7 +237,7 @@ sequenceDiagram
 ### 5.5 Triển khai (S06–S08)
 
 Chi tiết ở [05 — Triển khai, CI/CD & vận hành](05-deployment-cicd.md). Tóm tắt:
-PR → CI (lint, unit, integration, coverage) → merge `main` → build image tag `sha` → push ECR (OIDC) →
+PR → CI (lint, unit, integration, coverage) → merge `main` → build image tag `sha` → push GHCR → runner trên EC2 nhận job →
 SSM chạy `deploy.sh <sha>` trên EC2 → migration → bật màu rảnh → health check → chuyển Nginx → kiểm tra khói qua HTTPS → hỏng thì quay về màu cũ.
 
 ## 6. Suy giảm có kiểm soát

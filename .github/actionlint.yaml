@@ -1,0 +1,4 @@
+self-hosted-runner:
+  # Label of the deploy runner installed on the EC2 host (infra/scripts/setup-runner.sh).
+  labels:
+    - shopfast-prod

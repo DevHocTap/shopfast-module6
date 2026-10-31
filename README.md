@@ -36,12 +36,12 @@ pnpm dev:web           # http://localhost:5173
 apps/api     NestJS — 2 entrypoint: src/main.ts (api) và src/worker.ts (worker)
 apps/web     React + Vite — giao diện tối thiểu để demo
 infra/       Dockerfile, Compose, Nginx, script triển khai/sao lưu, IAM policy
-.github/     CI (lint, test, coverage, gitleaks, docker build) và Deploy (ECR → SSM → blue/green → smoke → rollback)
+.github/     CI (lint, test, coverage, gitleaks, docker build) và Deploy (GHCR → runner trên EC2 → blue/green → smoke → rollback)
 docs/        Tài liệu kiến trúc & quyết định kỹ thuật
 ```
 
 ## Luồng triển khai
 
-PR → CI xanh → merge `main` → build image `:<sha>` → ECR (OIDC, không có access key) → SSM chạy `deploy.sh <sha>` trên EC2
+PR → CI xanh → merge `main` → build image `:<sha>` → GHCR (token tạm của job) → self-hosted runner trên EC2 chạy `deploy.sh <sha>` (không có access key AWS nào)
 → migration → bật màu rảnh (blue/green) → health check → chuyển Nginx → smoke test qua HTTPS → hỏng thì `rollback.sh`.
 Chi tiết: [docs/05-deployment-cicd.md](docs/05-deployment-cicd.md).

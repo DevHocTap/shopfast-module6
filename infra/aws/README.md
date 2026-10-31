@@ -5,13 +5,11 @@ Mọi thao tác làm bằng IAM user trong group `Admins` **có MFA** — không
 
 ## 1. Tài khoản & con người (chuẩn Session 07)
 - [ ] Root: bật MFA, xoá mọi access key của root.
-- [ ] Tạo group `Admins` (AdministratorAccess) và `Developers` (quyền đọc + ECR/SSM nếu cần); user thuộc group, **bắt buộc MFA**.
+- [ ] Tạo group `Admins` (AdministratorAccess) và `Developers` (quyền đọc + SSM nếu cần); user thuộc group, **bắt buộc MFA**.
 - [ ] Bật AWS Budget cảnh báo chi phí (ví dụ 20 USD/tháng).
 
 ## 2. Lưu trữ
-- [ ] ECR: tạo repo `shopfast/api` và `shopfast/web`, bật **tag immutability** và scan on push.
-  Lifecycle: giữ 30 image gần nhất.
-- [ ] S3 `shopfast-artifacts-<ACCOUNT_ID>`: chặn public access; lifecycle xoá `releases/` sau 30 ngày.
+- [ ] S3 `shopfast-artifacts-<ACCOUNT_ID>`: chặn public access; chỉ dùng để chuyển script khởi tạo lên EC2 (`releases/bootstrap/`).
 - [ ] S3 `shopfast-backups-<ACCOUNT_ID>`: chặn public access, **bật versioning**, mã hoá SSE-KMS mặc định,
   lifecycle `daily/` → Glacier sau 30 ngày, xoá sau 90 ngày.
 
@@ -29,14 +27,12 @@ Sinh giá trị bằng `openssl rand -hex 32` (chỉ chữ + số, tránh ký t�
 
 ## 4. IAM role
 - [ ] **Instance role** `shopfast-ec2`: policy [ec2-instance-policy.json](iam/ec2-instance-policy.json) + managed policy `AmazonSSMManagedInstanceCore`.
-- [ ] **OIDC provider** `token.actions.githubusercontent.com` (audience `sts.amazonaws.com`).
-- [ ] **Deploy role** `shopfast-gha-deploy`: trust policy [gha-deploy-trust-policy.json](iam/gha-deploy-trust-policy.json)
-  (chỉ job chạy trong GitHub environment `production` của đúng repo được assume),
-  permission policy [gha-deploy-policy.json](iam/gha-deploy-policy.json). Max session 1 giờ.
+- Không tạo OIDC provider / deploy role: SCP của lớp chặn. GitHub Actions deploy qua self-hosted runner trên EC2,
+  dùng chính instance role này (xem `docs/07` ADR-13).
 
 ## 5. Mạng & máy chủ
 - [ ] Security group `shopfast-web`: inbound `80`, `443` từ `0.0.0.0/0` (và `::/0`); `22` **chỉ** từ `<IP quản trị>/32`. Không mở 3000/5432/6379.
-- [ ] EC2 **t3.medium**, Amazon Linux 2023, EBS gp3 30 GB (mã hoá), instance role `shopfast-ec2`,
+- [ ] EC2 **t3.small** (lên t3.medium trước buổi bảo vệ nếu cần), Amazon Linux 2023, EBS gp3 30 GB (mã hoá), instance role `shopfast-ec2`,
   **IMDSv2 bắt buộc** (`HttpTokens=required`), tag `app=shopfast`.
 - [ ] Elastic IP gắn vào instance; bản ghi DNS `A <domain> → Elastic IP`.
 
@@ -44,16 +40,20 @@ Sinh giá trị bằng `openssl rand -hex 32` (chỉ chữ + số, tránh ký t�
 ```bash
 # copy infra/scripts/bootstrap-ec2.sh và init-letsencrypt.sh lên máy, rồi:
 sudo DOMAIN=<domain> ADMIN_EMAIL=<email> AWS_REGION=<REGION> \
-     ECR_REGISTRY=<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com \
-     ARTIFACTS_BUCKET=shopfast-artifacts-<ACCOUNT_ID> BACKUP_BUCKET=shopfast-backups-<ACCOUNT_ID> \
+     IMAGE_REGISTRY=ghcr.io/devhoctap/shopfast-module6 \
+     BACKUP_BUCKET=shopfast-backups-<ACCOUNT_ID> \
      bash bootstrap-ec2.sh
 sudo bash init-letsencrypt.sh   # cần DNS đã trỏ đúng
+# GitHub → Settings → Actions → Runners → New self-hosted runner → chép token, rồi:
+sudo RUNNER_TOKEN=<token> bash setup-runner.sh
 ```
 
 ## 7. GitHub
+- [ ] Settings → Actions → General → *Fork pull request workflows from outside collaborators*:
+  **Require approval for all external contributors** (repo public + self-hosted runner).
 - [ ] Settings → Environments → tạo `production` (tuỳ chọn: required reviewer để duyệt trước khi deploy).
 - [ ] Settings → Variables (Actions) — **không phải secrets, vì không có gì bí mật**:
-  `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`, `ECR_REGISTRY`, `EC2_INSTANCE_ID`, `ARTIFACTS_BUCKET`, `APP_DOMAIN`.
+  `APP_DOMAIN` (= `shopfast.hmicodev.io.vn`). Không có secret AWS nào.
 - [ ] Branch protection cho `main`: bắt buộc PR, bắt buộc các check `Lint, format, typecheck`, `Unit tests + coverage gate`,
   `Integration tests (PostgreSQL 16 + Redis 7)`, `Secret scan (gitleaks)`, `Docker build (no push) (api)`, `Docker build (no push) (web)`;
   chặn force push.

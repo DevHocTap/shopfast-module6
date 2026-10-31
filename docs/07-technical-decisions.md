@@ -45,9 +45,9 @@ Tiêu chí "Bảo vệ quyết định kỹ thuật" là **điều kiện bắt 
 - **Quyết định:** 2 container `api-blue`/`api-green`, Nginx đổi upstream bằng reload.
 - **Đánh đổi:** cần RAM cho 2 bản cùng lúc (chọn t3.medium); một EC2 vẫn là điểm lỗi đơn — khắc phục bằng sao lưu + script dựng lại; hướng mở rộng là ALB + Auto Scaling Group + RDS.
 
-### ADR-09 — OIDC + instance role, không access key
+### ADR-09 — Instance role, không access key
 - **Bối cảnh:** SRS cấm khoá dài hạn.
-- **Quyết định:** GitHub Actions dùng OIDC; EC2 dùng instance profile; triển khai qua SSM Run Command (CI không cần SSH key).
+- **Quyết định:** EC2 dùng instance profile (credential tạm, tự xoay vòng). Ban đầu định cho GitHub Actions dùng OIDC + SSM Run Command, nhưng SCP của lớp chặn tạo OIDC provider → xem ADR-13.
 - **Đánh đổi:** cấu hình IAM ban đầu phức tạp hơn; đổi lại không có gì để lộ.
 
 ### ADR-10 — PostgreSQL & Redis trong container trên cùng EC2
@@ -57,8 +57,13 @@ Tiêu chí "Bảo vệ quyết định kỹ thuật" là **điều kiện bắt 
 
 ### ADR-12 — Region Sydney (`ap-southeast-2`)
 - **Bối cảnh:** tài khoản AWS của lớp nằm trong một AWS Organization; Service Control Policy chặn mọi region khác Sydney.
-- **Quyết định:** toàn bộ tài nguyên (EC2, ECR, S3, SSM) ở `ap-southeast-2`.
+- **Quyết định:** toàn bộ tài nguyên AWS (EC2, S3, SSM) ở `ap-southeast-2`.
 - **Đánh đổi:** từ Việt Nam tới Sydney mất khoảng 120–180 ms khứ hồi (Singapore khoảng 30–50 ms). Vì vậy ngưỡng SRS "p95 < 50 ms" được đo **tại máy chủ** (`upstream_response_time` của Nginx, header `Server-Timing`, k6 chạy trong cùng region), không đo từ trình duyệt ở Việt Nam. Khi lên production thật sẽ chọn Singapore và đặt CDN trước phần web tĩnh.
+
+### ADR-13 — Deploy bằng self-hosted runner trên EC2, image trên GHCR
+- **Bối cảnh:** SCP của lớp chặn `iam:CreateOpenIDConnectProvider` (và yêu cầu nâng cấp gói), nên GitHub Actions không thể nhận credential AWS tạm thời qua OIDC. SRS cấm access key dài hạn.
+- **Quyết định:** build image trên runner của GitHub, đẩy lên GHCR bằng `GITHUB_TOKEN` (tự cấp cho từng job, hết hạn khi job xong). Job deploy/rollback chạy trên **self-hosted runner cài tại EC2**, dùng instance role cho mọi lệnh AWS. Runner chỉ mở kết nối ra ngoài tới GitHub — không mở thêm cổng.
+- **Đánh đổi:** runner có quyền Docker trên máy production (tương đương root), nên ai chạy được workflow trên nó là chạy được lệnh trên máy. Giảm rủi ro: chỉ `deploy.yml` (kích hoạt bởi push `main` hoặc người có quyền ghi) nhắm nhãn `shopfast-prod`; repo bật **"Require approval for all external contributors"** để PR từ fork không tự chạy; `main` được bảo vệ. Token đăng ký runner dùng một lần và hết hạn sau 1 giờ.
 
 ### ADR-11 — Trợ lý AI chỉ được "đề xuất", con người "thực thi"
 - **Bối cảnh:** LLM có thể sai hoặc bị prompt injection; SRS bắt buộc người xác nhận thao tác ghi.
@@ -83,7 +88,7 @@ Tiêu chí "Bảo vệ quyết định kỹ thuật" là **điều kiện bắt 
 | Vậy kẻ xấu cố tình khoá tài khoản người khác? | Thời gian khoá ngắn ở các mức đầu, gửi email cảnh báo chủ tài khoản; mở rộng: yêu cầu CAPTCHA thay vì khoá cứng. Nêu rõ đây là đánh đổi bảo mật ↔ khả dụng. |
 | Người dùng sau NAT (cùng IP) bị chặn oan? | Khi đã đăng nhập, hạn mức đếm theo tài khoản; chỉ request ẩn danh mới đếm theo IP, và hạn mức ẩn danh đủ rộng cho trang công khai. |
 | Lộ secret? | Đổi trong SSM → chạy lại deploy cùng SHA (render-env lấy giá trị mới). Không có khoá AWS dài hạn để lộ. Gitleaks chặn từ PR. |
-| Mất cả EC2? | Dựng EC2 mới theo `infra/aws/README.md`, khôi phục DB từ S3, deploy SHA `last-good` từ ECR. RPO 24 h. |
+| Mất cả EC2? | Dựng EC2 mới theo `infra/aws/README.md`, khôi phục DB từ S3, cài lại runner (`setup-runner.sh`), chạy Deploy với SHA tốt gần nhất (image còn trên GHCR). RPO 24 h. |
 | LLM trả lời bịa? | Prompt cấm + kiểm tra đầu ra (mã đơn nhắc tới phải có trong tool_result) + nhân viên đọc trước khi gửi khách; mọi hành động ghi cần duyệt. |
 | Khoá LLM hết hạn mức? | Adapter bắt lỗi → phân loại thành `UNCLASSIFIED`, chat báo trợ lý tạm ngưng; hạn mức `ai` 20 req/phút/nhân viên kiểm soát chi phí. |
 | Vì sao không dùng Kubernetes/ECS? | Một máy, một người vận hành; Compose + script blue/green đáp ứng đủ yêu cầu không gián đoạn và quay lui, dễ giải thích. |

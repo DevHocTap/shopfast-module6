@@ -1,6 +1,13 @@
 name: Deploy
 
 # Runs only after CI succeeded on a push to main, or manually to redeploy a given commit.
+#
+#   build    (GitHub-hosted)  build api/web images, push to GHCR with the per-job GITHUB_TOKEN
+#   deploy   (self-hosted on the EC2 host)  stage infra bundle, blue/green deploy.sh
+#   smoke    (GitHub-hosted)  check the public HTTPS endpoint from outside
+#   rollback (self-hosted)    only when smoke fails
+#
+# No AWS credential exists in GitHub: AWS calls happen on the EC2 host with its instance role.
 on:
   workflow_run:
     workflows: [CI]
@@ -12,10 +19,7 @@ on:
         description: Full commit SHA to deploy (default = current main)
         required: false
 
-# OIDC: GitHub issues a short-lived token, AWS exchanges it for temporary credentials.
-# No AWS access key is stored anywhere.
 permissions:
-  id-token: write
   contents: read
 
 concurrency:
@@ -23,40 +27,35 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
-  INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-  ARTIFACTS_BUCKET: ${{ vars.ARTIFACTS_BUCKET }}
+  SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+  # GHCR image names must be lowercase.
+  IMAGE_REGISTRY: ghcr.io/devhoctap/shopfast-module6
   APP_URL: https://${{ vars.APP_DOMAIN }}
 
 jobs:
-  deploy:
+  build:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ env.APP_URL }}
-    timeout-minutes: 15
-    env:
-      SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with: { ref: '${{ env.SHA }}' }
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: docker/login-action@v3
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Check whether images already exist (immutable tags)
+      - name: Skip images that already exist (tags are treated as immutable)
         id: exists
         run: |
           for image in api web; do
-            if aws ecr describe-images --repository-name "shopfast/$image" --image-ids imageTag="$SHA" > /dev/null 2>&1; then
+            if docker buildx imagetools inspect "$IMAGE_REGISTRY/$image:$SHA" > /dev/null 2>&1; then
               echo "$image=true" >> "$GITHUB_OUTPUT"
             else
               echo "$image=false" >> "$GITHUB_OUTPUT"
@@ -72,7 +71,7 @@ jobs:
           context: .
           file: infra/docker/api.Dockerfile
           push: true
-          tags: ${{ env.ECR_REGISTRY }}/shopfast/api:${{ env.SHA }}
+          tags: ${{ env.IMAGE_REGISTRY }}/api:${{ env.SHA }}
           build-args: APP_VERSION=${{ env.SHA }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=api
@@ -85,26 +84,52 @@ jobs:
           context: .
           file: infra/docker/web.Dockerfile
           push: true
-          tags: ${{ env.ECR_REGISTRY }}/shopfast/web:${{ env.SHA }}
+          tags: ${{ env.IMAGE_REGISTRY }}/web:${{ env.SHA }}
           build-args: APP_VERSION=${{ env.SHA }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
 
-      - name: Upload infra bundle (compose, nginx, scripts)
-        run: |
-          chmod +x infra/scripts/*.sh infra/postgres/init/*.sh
-          tar czf infra.tar.gz -C infra compose nginx scripts postgres
-          aws s3 cp --only-show-errors infra.tar.gz "s3://$ARTIFACTS_BUCKET/releases/$SHA/infra.tar.gz"
+  deploy:
+    needs: build
+    runs-on: [self-hosted, shopfast-prod]
+    environment:
+      name: production
+      url: ${{ env.APP_URL }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ env.SHA }}' }
 
-      - name: Deploy on EC2 (SSM Run Command)
-        run: |
-          bash .github/scripts/ssm-run.sh "set -euo pipefail
-          mkdir -p /opt/shopfast/releases/$SHA
-          aws s3 cp --only-show-errors s3://$ARTIFACTS_BUCKET/releases/$SHA/infra.tar.gz - | tar xz -C /opt/shopfast/releases/$SHA
-          /opt/shopfast/releases/$SHA/scripts/deploy.sh $SHA"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Smoke test through HTTPS
-        id: smoke
+      - name: Stage release bundle (compose, nginx, scripts)
+        run: |
+          RELEASE=/opt/shopfast/releases/$SHA
+          rm -rf "$RELEASE" && mkdir -p "$RELEASE"
+          cp -r infra/compose infra/nginx infra/scripts infra/postgres "$RELEASE/"
+          chmod +x "$RELEASE"/scripts/*.sh "$RELEASE"/postgres/init/*.sh
+
+      - name: Blue/green deploy
+        run: |
+          "/opt/shopfast/releases/$SHA/scripts/deploy.sh" "$SHA"
+
+      - name: Forget registry credentials
+        if: always()
+        run: docker logout ghcr.io || true
+
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke test through public HTTPS
         run: |
           for attempt in $(seq 1 10); do
             live=$(curl -fsS "$APP_URL/api/health/live" || true)
@@ -120,9 +145,13 @@ jobs:
           echo "::error::Smoke test failed for $SHA"
           exit 1
 
-      - name: Roll back
-        if: failure() && steps.smoke.outcome == 'failure'
+  rollback:
+    needs: [deploy, smoke]
+    if: failure() && needs.smoke.result == 'failure'
+    runs-on: [self-hosted, shopfast-prod]
+    steps:
+      - name: Roll back to the previous version
         run: |
-          bash .github/scripts/ssm-run.sh "/opt/shopfast/current/scripts/rollback.sh"
+          /opt/shopfast/current/scripts/rollback.sh
           echo "::error::Deployment of $SHA failed the smoke test and was rolled back"
           exit 1

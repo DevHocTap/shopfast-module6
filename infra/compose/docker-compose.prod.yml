@@ -1,7 +1,7 @@
 # Production stack on EC2. Always run through deploy.sh, which provides the interpolation file:
 #   docker compose -p shopfast --env-file $SHARED_DIR/deploy.env -f docker-compose.prod.yml ...
 #
-# deploy.env (non-secret): ECR_REGISTRY, SHARED_DIR, API_BLUE_TAG, API_GREEN_TAG, WORKER_TAG
+# deploy.env (non-secret): IMAGE_REGISTRY, SHARED_DIR, API_BLUE_TAG, API_GREEN_TAG, WORKER_TAG
 # $SHARED_DIR/.env (secrets, chmod 600): rendered from SSM Parameter Store by render-env.sh
 #
 # Only nginx publishes ports. PostgreSQL / Redis / api / worker are reachable inside Docker networks only.
@@ -45,17 +45,17 @@ services:
 
   api-blue:
     <<: *api
-    image: ${ECR_REGISTRY}/shopfast/api:${API_BLUE_TAG}
+    image: ${IMAGE_REGISTRY}/api:${API_BLUE_TAG}
     container_name: shopfast-api-blue
 
   api-green:
     <<: *api
-    image: ${ECR_REGISTRY}/shopfast/api:${API_GREEN_TAG}
+    image: ${IMAGE_REGISTRY}/api:${API_GREEN_TAG}
     container_name: shopfast-api-green
 
   worker:
     <<: *api
-    image: ${ECR_REGISTRY}/shopfast/api:${WORKER_TAG}
+    image: ${IMAGE_REGISTRY}/api:${WORKER_TAG}
     container_name: shopfast-worker
     command: ['node', 'dist/worker.js']
     networks: [backend, egress]

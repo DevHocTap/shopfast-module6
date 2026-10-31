@@ -24,22 +24,21 @@ flowchart LR
   ci -->|merge| main[push main]
   main -->|CI xanh trên main<br/>workflow_run| cd
   subgraph cd[deploy.yml — concurrency: production]
-    b[build & push<br/>api:SHA, web:SHA → ECR] --> bundle[infra.tar.gz → S3 artifacts]
-    bundle --> d[SSM: deploy.sh SHA]
+    b[build & push — runner GitHub<br/>api:SHA, web:SHA → GHCR] --> d[deploy — runner trên EC2<br/>chép infra/ → deploy.sh SHA]
     d --> s[smoke test HTTPS<br/>live.version = SHA, ready = 200, web = 200]
-    s -- lỗi --> rb[SSM: rollback.sh]
+    s -- lỗi --> rb[rollback — runner trên EC2<br/>rollback.sh]
   end
 ```
 
 `deploy.yml` chỉ chạy khi `ci.yml` **thành công trên `main`** (sự kiện `workflow_run`), hoặc chạy tay (`workflow_dispatch`) để triển khai lại một SHA cũ.
-Compose, cấu hình Nginx và script của đúng commit đó được đóng gói `infra.tar.gz`, đẩy lên S3 `shopfast-artifacts-*`; EC2 tải về `/opt/shopfast/releases/<sha>/` → mã hạ tầng luôn khớp phiên bản ứng dụng, CI không cần SSH hay git trên máy chủ.
+Job deploy chạy trên **self-hosted runner đặt ngay trên EC2** (cài bằng [`setup-runner.sh`](../infra/scripts/setup-runner.sh)): checkout đúng commit, chép `infra/` vào `/opt/shopfast/releases/<sha>/` rồi chạy `deploy.sh` → mã hạ tầng luôn khớp phiên bản ứng dụng. Runner chỉ mở kết nối **ra ngoài** tới GitHub, không cần mở thêm cổng nào, và dùng instance role cho mọi lệnh AWS. Smoke test chạy trên runner của GitHub để kiểm tra HTTPS **từ bên ngoài** như người dùng thật.
 
 **Mục tiêu < 10 phút:** cache layer Docker (`cache-from/cache-to: type=gha`), cache pnpm store, chạy song song lint/test, image `node:20-alpine` nhỏ. Ước tính: build + push ~3', deploy ~2', smoke ~30''.
 
 **Bằng chứng cần lưu cho hội đồng:** link lịch sử Actions có (1) các lần chạy xanh, (2) một PR bị chặn vì test hỏng, (3) một lần deploy tự quay lui.
 
 ### Gắn thẻ image
-- Mỗi image gắn `:<git-sha>` (bất biến, ECR bật *tag immutability*). Không dùng `latest` trên production.
+- Mỗi image gắn `:<git-sha>` (coi là bất biến: workflow bỏ qua build nếu tag đã tồn tại trên GHCR). Không dùng `latest` trên production.
 - Nhãn OCI `org.opencontainers.image.revision=<sha>`, `source=<repo-url>` → từ container đang chạy truy ngược ra commit.
 - `GET /api/health/live` trả `version: <sha>` để demo đang chạy bản nào.
 
@@ -56,7 +55,7 @@ Bố cục trên EC2 (chú thích đầy đủ ở đầu [`infra/scripts/lib.sh
 Các bước của [`deploy.sh`](../infra/scripts/deploy.sh):
 ```
 1. render-env.sh                     secret từ SSM → shared/.env (api, worker) và shared/datastore.env (pg, redis)
-2. docker pull api:<sha>, web:<sha>  bằng instance role (ECR)
+2. docker pull api:<sha>, web:<sha>  từ GHCR (job đã đăng nhập bằng GITHUB_TOKEN tạm)
 3. Cài cấu hình dùng chung           nginx.conf, shopfast.conf (thay __DOMAIN__), postgres-init
 4. compose up --no-recreate postgres redis
                                      deploy KHÔNG BAO GIỜ khởi động lại data store
@@ -101,16 +100,16 @@ Diễn tập trước buổi bảo vệ: merge một commit làm `/health/ready`
 
 | Chủ thể | Cách xác thực với AWS | Quyền (đặc quyền tối thiểu) |
 |---------|------------------------|-----------------------------|
-| GitHub Actions | **OIDC** → `AssumeRoleWithWebIdentity` vào `shopfast-gha-deploy`. Trust policy chỉ chấp nhận `sub = repo:<owner>/<repo>:environment:production` | Push ECR vào đúng 2 repo `shopfast/api`, `shopfast/web`; `s3:PutObject` vào `shopfast-artifacts-*/releases/*`; `ssm:SendCommand` chỉ với instance có tag `app=shopfast` và document `AWS-RunShellScript`; `ssm:GetCommandInvocation`. Policy: [`infra/aws/iam/`](../infra/aws/iam/) |
-| EC2 (app, backup) | **Instance profile** `shopfast-ec2` — thông tin tạm thời tự xoay vòng qua IMDSv2 | ECR pull; `ssm:GetParameter*` trên `/shopfast/prod/*`; `s3:GetObject` gói release; `s3:PutObject` vào `shopfast-backups-*/daily/*` (**không có quyền xoá**); `cloudwatch:PutMetricData` namespace `ShopFast`; `AmazonSSMManagedInstanceCore`. Thêm `ses:SendEmail` ở giai đoạn 3 |
+| GitHub Actions | **Không có quyền AWS nào.** Job build chỉ có `packages: write` (GHCR) qua `GITHUB_TOKEN` tự hết hạn. Job deploy chạy trên runner tại EC2 nên dùng instance role của máy | — |
+| EC2 (app, backup) | **Instance profile** `shopfast-ec2` — thông tin tạm thời tự xoay vòng qua IMDSv2 | `ssm:GetParameter*` trên `/shopfast/prod/*`; `s3:GetObject` gói release; `s3:PutObject` vào `shopfast-backups-*/daily/*` (**không có quyền xoá**); `cloudwatch:PutMetricData` namespace `ShopFast`; `AmazonSSMManagedInstanceCore`. Thêm `ses:SendEmail` ở giai đoạn 3 |
 | Con người | IAM user trong **group** (`Admins`, `Developers`), **bắt buộc MFA**, không dùng root | Theo group; tài khoản root khoá MFA, không có access key |
 
 Bật IMDSv2 bắt buộc (`HttpTokens=required`) để chặn SSRF lấy credential.
 
 ### 5.2 Secrets
-- Lưu ở SSM Parameter Store, kiểu SecureString: `/shopfast/prod/DATABASE_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LLM_API_KEY`, `REDIS_PASSWORD`…
+- Lưu ở SSM Parameter Store, kiểu SecureString: `/shopfast/prod/DB_PASSWORD`, `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LLM_API_KEY`, `REDIS_PASSWORD`…
 - `render-env.sh` chạy trên EC2 bằng instance role, ghi `shared/.env` (api, worker) và `shared/datastore.env` (chỉ mật khẩu Postgres/Redis) quyền `600`. Tách hai file để thêm secret cho ứng dụng không làm Compose tạo lại container dữ liệu.
-- Không secret nào trong: mã nguồn, `Dockerfile` (không `ARG`/`ENV` chứa secret), `docker-compose*.yml`, workflow. GitHub chỉ giữ **biến không nhạy cảm** (`AWS_ROLE_ARN`, `AWS_REGION`, `ECR_REGISTRY`, `INSTANCE_ID`).
+- Không secret nào trong: mã nguồn, `Dockerfile` (không `ARG`/`ENV` chứa secret), `docker-compose*.yml`, workflow. GitHub chỉ giữ một **biến không nhạy cảm** `APP_DOMAIN`; token GHCR là `GITHUB_TOKEN` do GitHub tự cấp cho từng job.
 - CI chạy `gitleaks` chặn PR có chuỗi giống secret. `.dockerignore` loại `.env*`.
 
 ### 5.3 Mạng

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Blue/green deploy of one commit. Invoked by GitHub Actions through SSM Run Command:
+# Blue/green deploy of one commit. Invoked by the GitHub Actions self-hosted runner on this host,
+#   after it copied infra/ to /opt/shopfast/releases/<sha> and logged in to GHCR:
 #   /opt/shopfast/releases/<sha>/scripts/deploy.sh <sha>
 #
 # Order matters — every step before "switch traffic" can fail without users noticing:
@@ -18,9 +19,8 @@ START=$(date +%s)
 
 log "=== Deploying $SHA"
 "$SCRIPTS/render-env.sh"
-ecr_login
-docker pull -q "$ECR_REGISTRY/shopfast/api:$SHA"
-docker pull -q "$ECR_REGISTRY/shopfast/web:$SHA"
+docker pull -q "$IMAGE_REGISTRY/api:$SHA"
+docker pull -q "$IMAGE_REGISTRY/web:$SHA"
 
 log "Installing shared config"
 mkdir -p "$SHARED"/{nginx/conf.d,nginx/upstream.d,web/releases,postgres-init}
@@ -32,7 +32,7 @@ cp "$RELEASE"/postgres/init/* "$SHARED/postgres-init/"
 if [ ! -f "$DEPLOY_ENV" ]; then
   log "First deploy: initialising $DEPLOY_ENV"
   {
-    echo "ECR_REGISTRY=$ECR_REGISTRY"
+    echo "IMAGE_REGISTRY=$IMAGE_REGISTRY"
     echo "SHARED_DIR=$SHARED"
     echo "API_BLUE_TAG=$SHA"
     echo "API_GREEN_TAG=$SHA"
@@ -48,7 +48,7 @@ wait_healthy shopfast-redis 60 || die "redis not healthy"
 log "Running migrations"
 docker run --rm --network shopfast_backend --env-file "$SHARED/.env" \
   -e DB_HOST=postgres -e DB_USER=shopfast -e DB_NAME=shopfast -e REDIS_HOST=redis \
-  "$ECR_REGISTRY/shopfast/api:$SHA" node dist/infra/database/migrate.js
+  "$IMAGE_REGISTRY/api:$SHA" node dist/infra/database/migrate.js
 
 ACTIVE=$(read_state active_color)
 ACTIVE_SHA=$(read_state active_sha)
