@@ -16,6 +16,7 @@ pnpm install
 cp apps/api/.env.example apps/api/.env
 pnpm infra:up          # PostgreSQL :5432, Redis :6379, Mailpit http://localhost:8025
 pnpm db:migrate
+pnpm --filter api seed   # 1.000 sản phẩm, 204 tài khoản, 3.000 đơn demo
 pnpm dev:api           # http://localhost:3000/api/health/ready · Swagger http://localhost:3000/api/docs
 pnpm dev:worker        # tiến trình nền
 pnpm dev:web           # http://localhost:5173
@@ -27,7 +28,8 @@ pnpm dev:web           # http://localhost:5173
 |------|------|
 | `pnpm lint` / `pnpm typecheck` / `pnpm format` | Chất lượng mã |
 | `pnpm test` / `pnpm test:cov` | Unit test (ngưỡng coverage 60% tầng nghiệp vụ) |
-| `pnpm test:int` | Integration test — cần `pnpm infra:up` |
+| `DB_NAME=shopfast_test pnpm test:int` | Integration test trên Postgres/Redis thật — cần `pnpm infra:up` và database `shopfast_test` (test từ chối chạy nếu tên DB không kết thúc bằng `_test`) |
+| `pnpm --filter api seed` | Nạp dữ liệu demo (cần `SEED_DEMO_PASSWORD`) — production: [docs/runbooks/seed-production.md](docs/runbooks/seed-production.md) |
 | `pnpm --filter api migration:generate src/infra/database/migrations/<Name>` | Sinh migration từ entity |
 
 ## Cấu trúc

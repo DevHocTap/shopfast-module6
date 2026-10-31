@@ -7,8 +7,7 @@ Quy ước: khoá chính `id uuid` (trừ khi ghi chú), cột `created_at`, `up
 ```mermaid
 erDiagram
   users ||--o{ refresh_tokens : has
-  users ||--o| carts : owns
-  carts ||--o{ cart_items : contains
+  users ||--o{ cart_items : "has in cart"
   categories ||--o{ products : groups
   brands ||--o{ products : makes
   products ||--|| inventories : stock

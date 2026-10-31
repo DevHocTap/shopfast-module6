@@ -28,7 +28,12 @@ export default tseslint.config(
   },
   {
     // The config layer is the only place allowed to read process.env.
-    files: ['src/infra/config/**/*.ts', 'src/infra/database/data-source.ts', 'test/**/*.ts'],
+    files: [
+      'src/infra/config/**/*.ts',
+      'src/infra/database/data-source.ts',
+      'src/infra/database/seeds/**/*.ts',
+      'test/**/*.ts',
+    ],
     rules: { 'no-restricted-properties': 'off' },
   },
   {

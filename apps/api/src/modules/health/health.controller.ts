@@ -1,8 +1,11 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Public } from '../../common/auth/decorators';
 import { Response } from 'express';
 import { HealthService, LivenessReport, ReadinessReport } from './health.service';
 
+/** Public: probed by Docker healthchecks, the deploy pipeline and external uptime monitors. */
+@Public()
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
