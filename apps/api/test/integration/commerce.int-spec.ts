@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import request from 'supertest';
 import { DataSource } from 'typeorm';
-import { createTestApp, resetDatabase } from '../utils/test-app';
+import { createTestApp, httpClient, HttpClient, resetDatabase } from '../utils/test-app';
 
 interface Session {
   token: string;
@@ -13,7 +12,7 @@ interface Session {
 describe('Commerce core (integration: real PostgreSQL)', () => {
   let app: NestExpressApplication;
   let db: DataSource;
-  let http: ReturnType<typeof request>;
+  let http: HttpClient;
   const ids = {
     category: randomUUID(),
     brand: randomUUID(),
@@ -51,8 +50,8 @@ describe('Commerce core (integration: real PostgreSQL)', () => {
 
   beforeAll(async () => {
     ({ app, dataSource: db } = await createTestApp());
-    http = request(app.getHttpServer());
-    await resetDatabase(db);
+    http = httpClient(app);
+    await resetDatabase(app);
     await db.query(`INSERT INTO categories (id, name, slug) VALUES ($1, 'Tai nghe', 'tai-nghe')`, [
       ids.category,
     ]);

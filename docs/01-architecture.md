@@ -82,7 +82,7 @@ Docker Compose production chia 2 network: `edge` (nginx ↔ api) và `backend` (
 | Hàng đợi | BullMQ (`@nestjs/bullmq`) | Retry/backoff, delayed & repeatable job, `jobId` chống trùng, đã có Redis | RabbitMQ/SQS (thêm hạ tầng, không cần ở quy mô này) |
 | Độ tin cậy sự kiện | Transactional outbox | Đơn hàng và sự kiện được ghi trong cùng transaction → không mất email khi Redis chết | Đẩy job ngay sau commit (mất job nếu Redis lỗi đúng lúc đó) |
 | Realtime | Socket.IO 4 + `@socket.io/redis-adapter` | Tự kết nối lại, room, xác thực handshake; adapter cho phép 2 bản api (blue/green) cùng phát | WebSocket thuần (tự viết reconnect/room), SSE (một chiều, vẫn cần pub/sub) |
-| Rate limit | `@nestjs/throttler` + storage Redis | Named throttlers cho từng nhóm endpoint; Redis để đếm chung giữa các bản api | Chỉ dùng Nginx `limit_req` (không biết user nào đang đăng nhập) |
+| Rate limit | Guard tự viết + bộ đếm Lua trên Redis, dự phòng bằng bộ nhớ (ADR-14) | Đếm chung toàn API cho mỗi user/IP, chính sách riêng cho từng endpoint nhạy cảm, vẫn chặn được khi Redis chết | `@nestjs/throttler` (đếm theo từng route, không có dự phòng), chỉ Nginx `limit_req` (không biết user nào đang đăng nhập) |
 | AI | LLM qua cổng `LlmPort` (mặc định Anthropic Claude, tool use) | Tool calling ổn định; adapter cho phép đổi nhà cung cấp theo khoá lớp học cấp | Gọi SDK trực tiếp trong service (khó test, khó đổi) |
 | Email | SES (prod), Mailpit (local) | SES dùng IAM role của EC2 → không cần khoá SMTP dài hạn | Gmail SMTP (cần mật khẩu ứng dụng = khoá dài hạn) |
 | Reverse proxy | Nginx + Let's Encrypt (certbot) | TLS, HTTP→HTTPS, upgrade WebSocket, chuyển upstream blue/green bằng reload không rớt kết nối | ALB (tốn phí, cần ≥ 2 AZ) |

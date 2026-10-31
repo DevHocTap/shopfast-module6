@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { AppConfigService } from '../config/config.module';
 import { REDIS_CLIENT } from './redis.constants';
+import { ResilientRedis } from './resilient-redis';
 
 /**
  * Shared Redis connection. Tuned to fail fast instead of hanging:
@@ -40,8 +41,9 @@ import { REDIS_CLIENT } from './redis.constants';
         return client;
       },
     },
+    ResilientRedis,
   ],
-  exports: [REDIS_CLIENT],
+  exports: [REDIS_CLIENT, ResilientRedis],
 })
 export class RedisModule implements OnApplicationShutdown {
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}

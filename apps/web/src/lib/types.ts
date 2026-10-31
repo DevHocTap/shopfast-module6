@@ -78,6 +78,7 @@ export interface OrderSummary {
 export interface OrderDetail extends OrderSummary {
   subtotal: number;
   discount: number;
+  voucherCode: string | null;
   updatedAt: string;
   items: {
     productId: string;
@@ -98,4 +99,12 @@ export interface StockLevel {
   quantity: number;
   version: number;
   updatedAt: string;
+}
+
+export interface CacheStats {
+  hits: number;
+  misses: number;
+  bypasses: number;
+  hitRatio: number;
+  redis: 'closed' | 'open' | 'half-open';
 }

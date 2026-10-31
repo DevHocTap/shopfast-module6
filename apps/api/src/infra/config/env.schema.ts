@@ -35,6 +35,9 @@ export const envSchema = z.object({
   /** Password of the seeded demo accounts. Required only when running the seed script. */
   SEED_DEMO_PASSWORD: z.string().min(8).optional(),
 
+  /** Off only for load tests that measure raw throughput. */
+  RATE_LIMIT_ENABLED: booleanString.default('true'),
+
   WORKER_HEARTBEAT_FILE: z.string().default('/tmp/worker-heartbeat'),
 });
 

@@ -1,5 +1,6 @@
 import { Role } from '../../common/auth/role.enum';
 import { TransactionRunner } from '../../infra/database/transaction-runner';
+import { ProductCache } from '../catalog/product-cache';
 import { InventoryRepository, StockLevel } from './inventory.repository';
 import { InventoryService } from './inventory.service';
 
@@ -21,12 +22,15 @@ function setup() {
     recordMovements: jest.fn(),
   };
   const tx = { run: jest.fn((work: (t: unknown) => Promise<unknown>) => work('TX')) };
+  const productCache = { stockChanged: jest.fn() };
   return {
     service: new InventoryService(
       repo as unknown as InventoryRepository,
       tx as unknown as TransactionRunner,
+      productCache as unknown as ProductCache,
     ),
     repo,
+    productCache,
   };
 }
 
@@ -49,7 +53,7 @@ describe('InventoryService', () => {
   });
 
   it('records the difference of a stock count as an ADJUST movement', async () => {
-    const { service, repo } = setup();
+    const { service, repo, productCache } = setup();
 
     await service.setQuantity(actor, 'p1', 12);
 
@@ -57,6 +61,7 @@ describe('InventoryService', () => {
     expect(repo.recordMovements).toHaveBeenCalledWith('TX', [
       { productId: 'p1', delta: 2, reason: 'ADJUST', actorId: 'w1' },
     ]);
+    expect(productCache.stockChanged).toHaveBeenCalledWith(['p1']);
   });
 
   it('writes no movement when the count did not change', async () => {

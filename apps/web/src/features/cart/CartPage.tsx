@@ -2,6 +2,7 @@ import { ShoppingCart, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, ButtonLink } from '../../components/ui/Button';
+import { InputField } from '../../components/ui/Field';
 import { QuantityStepper } from '../../components/ui/QuantityStepper';
 import { Card, EmptyState, InlineAlert, PageHeader, Skeleton } from '../../components/ui/States';
 import { api, errorMessage } from '../../lib/api-client';
@@ -17,6 +18,7 @@ export function CartPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string>();
+  const [voucherCode, setVoucherCode] = useState('');
   // One key per checkout attempt: a double click or a network retry cannot create a second order.
   const idempotencyKey = useRef(crypto.randomUUID());
 
@@ -65,6 +67,7 @@ export function CartPage() {
       const order = await api<OrderDetail>('/orders', {
         method: 'POST',
         headers: { 'Idempotency-Key': idempotencyKey.current },
+        body: voucherCode.trim() ? { voucherCode: voucherCode.trim() } : {},
       });
       idempotencyKey.current = crypto.randomUUID();
       await reload();
@@ -148,6 +151,18 @@ export function CartPage() {
             </div>
           </dl>
           <div className="mt-6 flex flex-col gap-4">
+            <InputField
+              label="Mã giảm giá (nếu có)"
+              value={voucherCode}
+              onChange={(event) => {
+                setVoucherCode(event.target.value.toUpperCase());
+                setCheckoutError(undefined);
+              }}
+              placeholder="Ví dụ: SALE10"
+              autoComplete="off"
+              maxLength={32}
+              hint="Giảm giá được trừ khi đặt hàng."
+            />
             {checkoutError && <InlineAlert tone="danger">{checkoutError}</InlineAlert>}
             {cart.hasUnavailableItems && !checkoutError && (
               <InlineAlert tone="warning">

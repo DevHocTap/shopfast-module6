@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { ServerTimingInterceptor } from './common/interceptors/server-timing.interceptor';
+import { RateLimitModule } from './common/rate-limit/rate-limit.module';
+import { CacheModule } from './infra/cache/cache.module';
 import { AppConfigModule } from './infra/config/config.module';
 import { DatabaseModule } from './infra/database/database.module';
 import { LoggerModule } from './infra/logger/logger.module';
 import { RedisModule } from './infra/redis/redis.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CartModule } from './modules/cart/cart.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
@@ -20,6 +24,8 @@ import { UsersModule } from './modules/users/users.module';
     LoggerModule,
     DatabaseModule,
     RedisModule,
+    CacheModule,
+    RateLimitModule,
     HealthModule,
     AuthModule,
     UsersModule,
@@ -27,7 +33,11 @@ import { UsersModule } from './modules/users/users.module';
     InventoryModule,
     CartModule,
     OrdersModule,
+    AdminModule,
   ],
-  providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
+  providers: [
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_INTERCEPTOR, useClass: ServerTimingInterceptor },
+  ],
 })
 export class AppModule {}

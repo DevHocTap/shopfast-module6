@@ -15,7 +15,11 @@ export interface ProductFilter {
   limit: number;
 }
 
-export interface ProductRow {
+/**
+ * Catalog data that changes rarely (name, price, classification). Cached for minutes.
+ * Stock is deliberately NOT part of it: it changes on every order and is cached separately.
+ */
+export interface ProductInfo {
   id: string;
   sku: string;
   name: string;
@@ -23,7 +27,6 @@ export interface ProductRow {
   price: number;
   isActive: boolean;
   version: number;
-  stock: number;
   category: { id: string; name: string };
   brand: { id: string; name: string };
 }
@@ -36,7 +39,6 @@ interface RawProductRow {
   price: string;
   is_active: boolean;
   version: number;
-  stock: number | null;
   category_id: string;
   category_name: string;
   brand_id: string;
@@ -53,22 +55,20 @@ const ORDER_BY: Record<ProductSort, string> = {
 
 const SELECT_PRODUCT = `
   SELECT p.id, p.sku, p.name, p.description, p.price, p.is_active, p.version,
-         COALESCE(i.quantity, 0) AS stock,
          c.id AS category_id, c.name AS category_name,
          b.id AS brand_id, b.name AS brand_name`;
 
 const FROM_PRODUCT = `
   FROM products p
   JOIN categories c ON c.id = p.category_id
-  JOIN brands b ON b.id = p.brand_id
-  LEFT JOIN inventories i ON i.product_id = p.id`;
+  JOIN brands b ON b.id = p.brand_id`;
 
 @Injectable()
 export class CatalogRepository {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   /** One round-trip: rows plus total count via a window function. */
-  async search(filter: ProductFilter): Promise<{ rows: ProductRow[]; total: number }> {
+  async search(filter: ProductFilter): Promise<{ rows: ProductInfo[]; total: number }> {
     const where = ['p.is_active'];
     const params: unknown[] = [];
     const bind = (value: unknown) => {
@@ -88,15 +88,25 @@ export class CatalogRepository {
       LIMIT ${bind(filter.limit)} OFFSET ${bind(filter.offset)}`;
 
     const raw: RawProductRow[] = await this.dataSource.query(sql, params);
-    return { rows: raw.map(toProductRow), total: raw.length ? Number(raw[0].total_count) : 0 };
+    return { rows: raw.map(toProductInfo), total: raw.length ? Number(raw[0].total_count) : 0 };
   }
 
-  async findById(id: string): Promise<ProductRow | null> {
+  async findById(id: string): Promise<ProductInfo | null> {
     const raw: RawProductRow[] = await this.dataSource.query(
       `${SELECT_PRODUCT} ${FROM_PRODUCT} WHERE p.id = $1`,
       [id],
     );
-    return raw.length ? toProductRow(raw[0]) : null;
+    return raw.length ? toProductInfo(raw[0]) : null;
+  }
+
+  /** Current stock for many products in one primary-key lookup. Unknown ids are absent. */
+  async stocks(productIds: string[]): Promise<Map<string, number>> {
+    if (productIds.length === 0) return new Map();
+    const rows: { product_id: string; quantity: number }[] = await this.dataSource.query(
+      'SELECT product_id, quantity FROM inventories WHERE product_id = ANY($1::uuid[])',
+      [productIds],
+    );
+    return new Map(rows.map((row) => [row.product_id, row.quantity]));
   }
 
   categories(): Promise<CategoryEntity[]> {
@@ -115,7 +125,7 @@ export class CatalogRepository {
   }
 }
 
-function toProductRow(r: RawProductRow): ProductRow {
+function toProductInfo(r: RawProductRow): ProductInfo {
   return {
     id: r.id,
     sku: r.sku,
@@ -124,7 +134,6 @@ function toProductRow(r: RawProductRow): ProductRow {
     price: Number(r.price),
     isActive: r.is_active,
     version: r.version,
-    stock: Number(r.stock ?? 0),
     category: { id: r.category_id, name: r.category_name },
     brand: { id: r.brand_id, name: r.brand_name },
   };

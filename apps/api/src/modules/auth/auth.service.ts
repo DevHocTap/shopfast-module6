@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { AccessTokenClaims } from '../../common/auth/auth-user';
 import { AppError } from '../../common/errors/app-error';
+import { LoginAttempts } from '../../common/rate-limit/login-attempts.service';
 import { Env } from '../../infra/config/env.schema';
 import { isUniqueViolation } from '../../infra/database/transaction-runner';
 import { UserEntity } from '../users/user.entity';
@@ -46,6 +47,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasher,
     @InjectRepository(RefreshTokenEntity) private readonly tokens: Repository<RefreshTokenEntity>,
+    private readonly attempts: LoginAttempts,
     config: ConfigService<Env, true>,
   ) {
     this.accessTtlSeconds = config.get('JWT_ACCESS_TTL_SECONDS', { infer: true });
@@ -69,13 +71,19 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthSession> {
+    // Locked accounts are refused before the password is even checked.
+    await this.attempts.assertNotLocked(dto.email);
     const user = await this.users.findByEmail(dto.email);
     this.dummyHash ??= this.hasher.hash(randomBytes(16).toString('hex'));
     const valid = await this.hasher.verify(
       dto.password,
       user?.passwordHash ?? (await this.dummyHash),
     );
-    if (!user || !valid) throw invalidCredentials();
+    if (!user || !valid) {
+      await this.attempts.recordFailure(dto.email);
+      throw invalidCredentials();
+    }
+    await this.attempts.recordSuccess(dto.email);
     return this.startSession(user);
   }
 

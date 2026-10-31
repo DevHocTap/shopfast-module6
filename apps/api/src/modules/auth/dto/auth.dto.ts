@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @IsEmail({}, { message: 'Email không hợp lệ.' })
@@ -24,4 +24,15 @@ export class LoginDto {
   @IsString()
   @MaxLength(128)
   password: string;
+}
+
+export class SendOtpDto {
+  @IsEmail({}, { message: 'Email không hợp lệ.' })
+  @MaxLength(254)
+  email: string;
+}
+
+export class VerifyOtpDto extends SendOtpDto {
+  @Matches(/^\d{6}$/, { message: 'Mã xác thực gồm 6 chữ số.' })
+  code: string;
 }
