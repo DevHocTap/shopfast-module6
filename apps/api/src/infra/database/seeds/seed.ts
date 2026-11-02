@@ -253,7 +253,7 @@ async function seed(dataSource: DataSource, demoPassword: string): Promise<void>
       { email: 'admin@shopfast.local', fullName: 'Quản trị viên', role: 'ADMIN' },
       { email: 'support@shopfast.local', fullName: 'Nhân viên CSKH', role: 'SUPPORT' },
       { email: 'warehouse@shopfast.local', fullName: 'Nhân viên kho', role: 'WAREHOUSE' },
-      { email: 'customer@shopfast.local', fullName: 'Khách hàng Demo', role: 'CUSTOMER' },
+      { email: 'customer@shopfast.local', fullName: 'Nguyễn Minh Anh', role: 'CUSTOMER' },
     ];
     const customers = Array.from({ length: CUSTOMER_COUNT }, (_, i) => ({
       email: `customer${String(i + 1).padStart(3, '0')}@shopfast.local`,

@@ -1,13 +1,74 @@
-/** Product visual placeholder until real images exist: the brand name on a neutral tile. */
-export function ProductTile({ brand, className = '' }: { brand: string; className?: string }) {
+import {
+  Cable,
+  Camera,
+  Headphones,
+  Keyboard,
+  Laptop,
+  LucideIcon,
+  Monitor,
+  Mouse,
+  Package,
+  Router,
+  Smartphone,
+  Speaker,
+  Tablet,
+  Watch,
+} from 'lucide-react';
+import { Badge } from './ui/Badge';
+
+/** One icon per catalog category (by name), so product visuals stay meaningful without photos. */
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  'Bàn phím': Keyboard,
+  Camera: Camera,
+  Chuột: Mouse,
+  Laptop: Laptop,
+  Loa: Speaker,
+  'Màn hình': Monitor,
+  'Máy tính bảng': Tablet,
+  'Sạc & cáp': Cable,
+  'Tai nghe': Headphones,
+  'Thiết bị mạng': Router,
+  'Điện thoại': Smartphone,
+  'Đồng hồ thông minh': Watch,
+};
+
+export const categoryIcon = (category: string): LucideIcon => CATEGORY_ICONS[category] ?? Package;
+
+/** Product visual: the category icon on a soft brand surface, with the brand name underneath. */
+export function ProductTile({
+  category,
+  brand,
+  size = 'md',
+  className = '',
+}: {
+  category: string;
+  brand: string;
+  size?: 'md' | 'lg';
+  className?: string;
+}) {
+  const Icon = categoryIcon(category);
   return (
     <div
-      className={`flex items-center justify-center rounded-sm bg-canvas px-4 text-lg font-semibold uppercase tracking-wide text-muted ring-1 ring-inset ring-border ${className}`}
+      className={`flex flex-col items-center justify-center gap-3 bg-brand-50 text-brand-600 ${className}`}
       aria-hidden
     >
-      <span className="truncate">{brand}</span>
+      <Icon className={size === 'lg' ? 'size-24' : 'size-12'} strokeWidth={1.5} />
+      <span
+        className={`max-w-full truncate px-4 font-semibold uppercase tracking-wider text-brand-700 ${
+          size === 'lg' ? 'text-base' : 'text-sm'
+        }`}
+      >
+        {brand}
+      </span>
     </div>
   );
+}
+
+/** Low or empty stock is worth flagging; plenty of stock is the normal case and stays quiet. */
+export function StockBadge({ stock }: { stock: number }) {
+  if (stock <= 0) return <Badge tone="danger">Hết hàng</Badge>;
+  if (stock <= 5) return <Badge tone="warning">Chỉ còn {stock}</Badge>;
+  return null;
 }
 
 export function StockBadgeText({ stock }: { stock: number }) {

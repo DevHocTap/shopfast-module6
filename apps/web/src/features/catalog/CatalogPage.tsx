@@ -1,11 +1,12 @@
-import { PackageSearch, SlidersHorizontal } from 'lucide-react';
+import { LayoutGrid, PackageSearch, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ProductTile, StockBadgeText } from '../../components/ProductTile';
+import { categoryIcon, ProductTile, StockBadge } from '../../components/ProductTile';
+import { ValueProps } from '../../components/ValueProps';
 import { Button } from '../../components/ui/Button';
 import { InputField, SelectField } from '../../components/ui/Field';
 import { Pagination } from '../../components/ui/Pagination';
-import { Card, EmptyState, ErrorState, PageHeader, Skeleton } from '../../components/ui/States';
+import { Card, EmptyState, ErrorState, Skeleton } from '../../components/ui/States';
 import { api, errorMessage } from '../../lib/api-client';
 import { formatVND } from '../../lib/format';
 import type { Named, Paginated, Product } from '../../lib/types';
@@ -20,6 +21,8 @@ const SORTS = [
   { value: 'name', label: 'Tên A → Z' },
 ];
 const FILTER_KEYS = ['q', 'categoryId', 'brandId', 'minPrice', 'maxPrice', 'sort'] as const;
+/** Filters set from the sidebar form (category and sort have their own controls). */
+const FORM_KEYS = ['q', 'brandId', 'minPrice', 'maxPrice'] as const;
 
 export function CatalogPage() {
   // Filters live in the URL: shareable links, and the back button restores the previous search.
@@ -56,11 +59,14 @@ export function CatalogPage() {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    update(Object.fromEntries(FILTER_KEYS.map((key) => [key, String(form.get(key) ?? '').trim()])));
+    update(Object.fromEntries(FORM_KEYS.map((key) => [key, String(form.get(key) ?? '').trim()])));
   }
 
   const [categories, brands] = facets.state.status === 'success' ? facets.state.data : [[], []];
   const total = products.state.status === 'success' ? products.state.data.total : undefined;
+  const showHero = !hasFilters && page === 1;
+  const activeCategory = categories.find((c) => c.id === filters.categoryId);
+  const Heading = showHero ? 'h2' : 'h1';
 
   const filterForm = (
     <form key={params.toString()} onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -70,16 +76,6 @@ export function CatalogPage() {
         type="search"
         defaultValue={filters.q}
         placeholder="Ví dụ: tai nghe"
-      />
-      <SelectField
-        label="Danh mục"
-        name="categoryId"
-        defaultValue={filters.categoryId}
-        onChange={(event) => update({ categoryId: event.target.value })}
-        options={[
-          { value: '', label: 'Tất cả danh mục' },
-          ...categories.map((c) => ({ value: c.id, label: c.name })),
-        ]}
       />
       <SelectField
         label="Thương hiệu"
@@ -111,13 +107,6 @@ export function CatalogPage() {
           inputMode="numeric"
         />
       </div>
-      <SelectField
-        label="Sắp xếp"
-        name="sort"
-        defaultValue={filters.sort || 'newest'}
-        onChange={(event) => update({ sort: event.target.value })}
-        options={SORTS}
-      />
       <div className="flex flex-col gap-2">
         <Button type="submit" variant="secondary">
           Áp dụng bộ lọc
@@ -132,13 +121,52 @@ export function CatalogPage() {
   );
 
   return (
-    <>
-      <PageHeader
-        title="Sản phẩm"
-        description={
-          total === undefined ? 'Đang tải danh sách…' : `${total.toLocaleString('vi-VN')} sản phẩm`
-        }
-      />
+    <div className="flex flex-col gap-8">
+      {showHero && (
+        <section className="rounded-lg bg-brand-900 px-6 py-8 text-white sm:px-12 sm:py-12">
+          <h1 className="max-w-3xl text-2xl font-semibold sm:text-4xl">
+            Thiết bị công nghệ chính hãng cho mỗi ngày
+          </h1>
+          <p className="mt-4 max-w-xl text-brand-100 sm:text-lg">
+            {total === undefined
+              ? 'Điện thoại, laptop, âm thanh và phụ kiện từ các thương hiệu hàng đầu.'
+              : `${total.toLocaleString('vi-VN')} sản phẩm${
+                  brands.length ? ` từ ${brands.length} thương hiệu` : ''
+                }: điện thoại, laptop, âm thanh và phụ kiện.`}
+          </p>
+          {/* On phones the products matter more than the pitch. */}
+          <div className="mt-12 hidden sm:block">
+            <ValueProps tone="dark" />
+          </div>
+        </section>
+      )}
+
+      <nav
+        aria-label="Danh mục"
+        className="no-scrollbar -mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0"
+      >
+        <ul className="flex gap-2 pb-1 lg:flex-wrap">
+          <li>
+            <CategoryChip
+              label="Tất cả"
+              icon={LayoutGrid}
+              active={!filters.categoryId}
+              onClick={() => update({ categoryId: '' })}
+            />
+          </li>
+          {categories.map((category) => (
+            <li key={category.id}>
+              <CategoryChip
+                label={category.name}
+                icon={categoryIcon(category.name)}
+                active={filters.categoryId === category.id}
+                onClick={() => update({ categoryId: category.id })}
+              />
+            </li>
+          ))}
+        </ul>
+      </nav>
+
       <div className="grid gap-8 lg:grid-cols-[256px_1fr]">
         <aside>
           <details className="group lg:hidden">
@@ -148,21 +176,50 @@ export function CatalogPage() {
             </summary>
             <Card className="mt-3 p-4">{filterForm}</Card>
           </details>
-          <div className="hidden lg:block">{filterForm}</div>
+          <Card className="hidden p-6 lg:block">
+            <h2 className="mb-4 flex items-center gap-2 font-semibold">
+              <SlidersHorizontal className="size-4 text-muted" aria-hidden />
+              Bộ lọc
+            </h2>
+            {filterForm}
+          </Card>
         </aside>
 
         <section aria-label="Danh sách sản phẩm" aria-busy={products.state.status === 'loading'}>
-          {products.state.status === 'loading' && (
-            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-              {Array.from({ length: 6 }, (_, i) => (
-                <Card key={i} className="p-4">
-                  <Skeleton className="aspect-[16/9] w-full" />
-                  <Skeleton className="mt-4 h-5 w-3/4" />
-                  <Skeleton className="mt-2 h-4 w-1/2" />
-                  <Skeleton className="mt-4 h-11 w-full" />
-                </Card>
-              ))}
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div className="min-w-0">
+              <Heading className="text-2xl font-semibold">
+                {activeCategory?.name ?? (filters.q ? `Kết quả cho “${filters.q}”` : 'Sản phẩm')}
+              </Heading>
+              <p className="mt-1 text-sm text-muted">
+                {total === undefined ? 'Đang tải…' : `${total.toLocaleString('vi-VN')} sản phẩm`}
+              </p>
             </div>
+            <div className="w-48">
+              <SelectField
+                label="Sắp xếp"
+                value={filters.sort || 'newest'}
+                onChange={(event) => update({ sort: event.target.value })}
+                options={SORTS}
+              />
+            </div>
+          </div>
+
+          {products.state.status === 'loading' && (
+            <ul className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }, (_, i) => (
+                <li key={i}>
+                  <Card className="overflow-hidden">
+                    <Skeleton className="aspect-[4/3] w-full rounded-none" />
+                    <div className="p-4">
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="mt-2 h-5 w-3/4" />
+                      <Skeleton className="mt-6 h-6 w-1/2" />
+                    </div>
+                  </Card>
+                </li>
+              ))}
+            </ul>
           )}
           {products.state.status === 'error' && (
             <ErrorState
@@ -187,30 +244,11 @@ export function CatalogPage() {
               <ul className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
                 {products.state.data.items.map((product) => (
                   <li key={product.id}>
-                    <Card className="flex h-full flex-col p-4">
-                      <Link to={`/products/${product.id}`} className="group flex flex-1 flex-col">
-                        <ProductTile brand={product.brand.name} className="aspect-[16/9] w-full" />
-                        <h2 className="mt-4 line-clamp-2 font-medium group-hover:text-brand-700">
-                          {product.name}
-                        </h2>
-                        <p className="mt-1 text-sm text-muted">
-                          {product.brand.name} · {product.category.name}
-                        </p>
-                        <div className="mt-auto flex items-end justify-between gap-2 pt-4">
-                          <span className="text-lg font-semibold">{formatVND(product.price)}</span>
-                          <StockBadgeText stock={product.stock} />
-                        </div>
-                      </Link>
-                      <Button
-                        variant="secondary"
-                        className="mt-4 w-full"
-                        disabled={!product.inStock}
-                        loading={pendingId === product.id}
-                        onClick={() => void add(product.id, product.name)}
-                      >
-                        {product.inStock ? 'Thêm vào giỏ' : 'Tạm hết hàng'}
-                      </Button>
-                    </Card>
+                    <ProductCard
+                      product={product}
+                      adding={pendingId === product.id}
+                      onAdd={() => void add(product.id, product.name)}
+                    />
                   </li>
                 ))}
               </ul>
@@ -226,6 +264,84 @@ export function CatalogPage() {
           )}
         </section>
       </div>
-    </>
+    </div>
+  );
+}
+
+function CategoryChip({
+  label,
+  icon: Icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: ReturnType<typeof categoryIcon>;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-sm px-4 text-sm font-medium transition-colors duration-150 ${
+        active
+          ? 'bg-brand-600 text-white'
+          : 'bg-surface text-ink shadow-card hover:bg-brand-50 hover:text-brand-700'
+      }`}
+    >
+      <Icon className="size-4" aria-hidden />
+      {label}
+    </button>
+  );
+}
+
+function ProductCard({
+  product,
+  adding,
+  onAdd,
+}: {
+  product: Product;
+  adding: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-lg bg-surface shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised">
+      <Link to={`/products/${product.id}`} className="flex flex-1 flex-col rounded-lg">
+        <div className="relative">
+          <ProductTile
+            category={product.category.name}
+            brand={product.brand.name}
+            className="aspect-[4/3] w-full"
+          />
+          <div className="absolute left-3 top-3">
+            <StockBadge stock={product.stock} />
+          </div>
+        </div>
+        <div className="flex flex-1 flex-col p-4">
+          <p className="text-sm text-muted">{product.category.name}</p>
+          <h2 className="mt-1 line-clamp-2 font-medium transition-colors duration-150 group-hover:text-brand-700">
+            {product.name}
+          </h2>
+          <p className="mt-auto pr-16 pt-4 text-lg font-semibold tabular-nums">
+            {formatVND(product.price)}
+          </p>
+        </div>
+      </Link>
+      <Button
+        variant="soft"
+        size="icon"
+        className="absolute bottom-4 right-4"
+        disabled={!product.inStock}
+        loading={adding}
+        onClick={onAdd}
+        aria-label={
+          product.inStock ? `Thêm ${product.name} vào giỏ` : `${product.name} tạm hết hàng`
+        }
+        title={product.inStock ? 'Thêm vào giỏ' : 'Tạm hết hàng'}
+      >
+        {!adding && <ShoppingCart className="size-5" aria-hidden />}
+      </Button>
+    </article>
   );
 }
