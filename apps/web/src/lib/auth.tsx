@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { api, setTokenSource } from './api-client';
+import { resetTrackingSocket } from './tracking';
 import type { Role, Session, User } from './types';
 
 type Status = 'loading' | 'authenticated' | 'anonymous';
@@ -34,10 +35,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const token = useRef<string | null>(null);
   const renewTimer = useRef<number>();
   const inflightRefresh = useRef<Promise<string | null> | null>(null);
+  const userId = useRef<string | null>(null);
 
   const apply = useCallback((session: Session | null) => {
     window.clearTimeout(renewTimer.current);
     token.current = session?.accessToken ?? null;
+    // Logout or another account: the realtime socket must not keep the previous identity.
+    const nextUserId = session?.user.id ?? null;
+    if (nextUserId !== userId.current) {
+      userId.current = nextUserId;
+      resetTrackingSocket();
+    }
     setUser(session?.user ?? null);
     setStatus(session ? 'authenticated' : 'anonymous');
   }, []);

@@ -8,6 +8,7 @@ import { OutboxRepository } from '../../infra/outbox/outbox.repository';
 import { CartRepository } from '../cart/cart.repository';
 import { ProductCache } from '../catalog/product-cache';
 import { InventoryRepository } from '../inventory/inventory.repository';
+import { OrderTrackingPublisher } from '../tracking/order-tracking.publisher';
 import { OrderErrors } from './order.errors';
 import {
   canTransition,
@@ -42,6 +43,7 @@ export class OrdersService {
     private readonly tx: TransactionRunner,
     private readonly productCache: ProductCache,
     private readonly outbox: OutboxRepository,
+    private readonly tracking: OrderTrackingPublisher,
   ) {}
 
   /**
@@ -150,7 +152,7 @@ export class OrdersService {
       await this.orders.insertPayment(tx, order.id, order.total, 'SIMULATED');
       await this.apply(tx, order, OrderStatus.PAID, user.id);
     });
-    return this.detailOrThrow(orderId);
+    return this.afterStatusChange(orderId);
   }
 
   async cancelByCustomer(user: AuthUser, orderId: string): Promise<OrderDetail> {
@@ -162,7 +164,7 @@ export class OrdersService {
       return this.apply(tx, order, OrderStatus.CANCELLED, user.id);
     });
     await this.productCache.stockChanged(restocked);
-    return this.detailOrThrow(orderId);
+    return this.afterStatusChange(orderId);
   }
 
   /**
@@ -185,7 +187,7 @@ export class OrdersService {
       return this.apply(tx, order, to, actor.id);
     });
     await this.productCache.stockChanged(restocked);
-    return this.detailOrThrow(orderId);
+    return this.afterStatusChange(orderId);
   }
 
   async getForUser(user: AuthUser, orderId: string): Promise<OrderDetail> {
@@ -253,6 +255,21 @@ export class OrdersService {
     await this.orders.updateStatus(tx, order.id, to);
     await this.orders.insertHistory(tx, order.id, order.status, to, actorId);
     return restocked;
+  }
+
+  /**
+   * Realtime push straight after the commit (not through the outbox, to stay well under 1 s).
+   * Lossy by design: a client that misses it re-reads the order over REST when it reconnects.
+   */
+  private async afterStatusChange(orderId: string): Promise<OrderDetail> {
+    const order = await this.detailOrThrow(orderId);
+    this.tracking.orderStatusChanged({
+      orderId: order.id,
+      status: order.status,
+      changedAt: order.updatedAt.toISOString(),
+      version: order.version,
+    });
+    return order;
   }
 
   private async detailOrThrow(orderId: string): Promise<OrderDetail> {

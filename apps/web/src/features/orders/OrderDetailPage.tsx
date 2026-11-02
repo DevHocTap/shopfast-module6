@@ -5,12 +5,14 @@ import { Button, ButtonLink } from '../../components/ui/Button';
 import { ConfirmButton } from '../../components/ui/ConfirmButton';
 import { Card, EmptyState, ErrorState, InlineAlert, Skeleton } from '../../components/ui/States';
 import { api, ApiError, apiText, errorMessage } from '../../lib/api-client';
-import { formatDateTime, formatVND } from '../../lib/format';
+import { formatDateTime, formatTime, formatVND } from '../../lib/format';
 import { CUSTOMER_CANCELLABLE, STATUS_FLOW, STATUS_LABEL } from '../../lib/order-status';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
+import type { OrderStatusEvent } from '../../lib/tracking';
 import type { OrderDetail } from '../../lib/types';
 import { useAsync } from '../../lib/use-async';
+import { TrackingStatus, useOrderTracking } from '../../lib/use-order-tracking';
 import { OrderStatusBadge } from './OrderStatusBadge';
 
 export function OrderDetailPage() {
@@ -20,6 +22,21 @@ export function OrderDetailPage() {
   const { state, reload, setState } = useAsync(() => api<OrderDetail>(`/orders/${id}`), [id]);
   const [action, setAction] = useState<'pay' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string>();
+  const [lastChange, setLastChange] = useState<OrderStatusEvent>();
+
+  const tracking = useOrderTracking(id, {
+    onStatus(event) {
+      // Our own pay/cancel comes back too, and events may arrive out of order: keep the newest.
+      if (state.status !== 'success' || event.version <= state.data.version) return;
+      setState({
+        status: 'success',
+        data: { ...state.data, status: event.status, version: event.version },
+      });
+      setLastChange(event);
+      void reload(); // history, payment and invoice come from the full order
+    },
+    onResync: () => void reload(),
+  });
 
   const back = (
     <Link
@@ -94,6 +111,7 @@ export function OrderDetailPage() {
             Đặt lúc {formatDateTime(order.createdAt)}
             {!isOwner && ` · khách ${order.customer.fullName} (${order.customer.email})`}
           </p>
+          <LiveIndicator status={tracking} lastChange={lastChange} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isOwner && order.status === 'PENDING_PAYMENT' && (
@@ -182,6 +200,62 @@ export function OrderDetailPage() {
   );
 }
 
+const LIVE_TEXT: Record<TrackingStatus, string> = {
+  connecting: 'Đang kết nối để nhận cập nhật trực tiếp…',
+  live: 'Trạng thái tự cập nhật, không cần tải lại trang',
+  reconnecting: 'Mất kết nối, đang thử kết nối lại…',
+  unavailable: 'Không nhận được cập nhật trực tiếp. Tải lại trang để xem trạng thái mới nhất.',
+};
+
+const LIVE_DOT: Record<TrackingStatus, string> = {
+  connecting: 'bg-muted',
+  live: 'bg-success-700',
+  reconnecting: 'bg-warning-700',
+  unavailable: 'bg-danger-700',
+};
+
+/** Tells the customer whether the page is live, and what just changed (read out politely). */
+function LiveIndicator({
+  status,
+  lastChange,
+}: {
+  status: TrackingStatus;
+  lastChange?: OrderStatusEvent;
+}) {
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      className={`mt-2 flex items-start gap-2 text-sm ${
+        status === 'reconnecting'
+          ? 'text-warning-700'
+          : status === 'unavailable'
+            ? 'text-danger-700'
+            : 'text-muted'
+      }`}
+    >
+      {/* h-5 = one line of text-sm: the dot stays on the first line when the text wraps. */}
+      <span className="flex h-5 shrink-0 items-center" aria-hidden>
+        <span
+          className={`size-2 rounded-full transition-colors duration-200 ${LIVE_DOT[status]}`}
+        />
+      </span>
+      <span>
+        {LIVE_TEXT[status]}
+        {status === 'live' && lastChange && (
+          <>
+            {' · '}
+            <span className="font-medium text-ink">
+              vừa chuyển sang “{STATUS_LABEL[lastChange.status]}” lúc{' '}
+              {formatTime(lastChange.changedAt)}
+            </span>
+          </>
+        )}
+      </span>
+    </p>
+  );
+}
+
 /** The invoice is produced by a background job a few seconds after the order is placed. */
 function InvoiceLink({ order }: { order: OrderDetail }) {
   const toast = useToast();
@@ -260,7 +334,7 @@ function ProgressTracker({ order }: { order: OrderDetail }) {
               className="flex items-center gap-3 sm:flex-col sm:items-start sm:gap-2"
             >
               <span
-                className={`flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                className={`flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors duration-300 ${
                   done
                     ? 'bg-brand-600 text-white'
                     : 'bg-canvas text-muted ring-1 ring-inset ring-border'
