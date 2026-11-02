@@ -21,11 +21,13 @@ const ACK_TIMEOUT_MS = 5_000;
 const MAX_AUTH_RETRIES = 3;
 
 /**
- * Follows one order in realtime (F02). Socket.IO reconnects on its own after a network loss;
+ * Follows one order in realtime (F02), or — with `orderId = null` — every order the user may
+ * see: their own orders, or all orders for staff (the server puts each socket in those rooms at
+ * connection, so list screens need no per-order subscription). Socket.IO reconnects on its own after a network loss;
  * this hook re-subscribes on every `connect` and asks for a REST resync, so a customer who was
  * offline for a while still ends up on the right status without reloading the page.
  */
-export function useOrderTracking(orderId: string | undefined, handlers: Handlers): TrackingStatus {
+export function useOrderTracking(orderId: string | null, handlers: Handlers): TrackingStatus {
   const [status, setStatus] = useState<TrackingStatus>('connecting');
   const handlersRef = useRef(handlers);
   useEffect(() => {
@@ -33,7 +35,6 @@ export function useOrderTracking(orderId: string | undefined, handlers: Handlers
   });
 
   useEffect(() => {
-    if (!orderId) return;
     const socket = acquireTrackingSocket();
     let disposed = false;
     let subscribedBefore = false;
@@ -42,6 +43,14 @@ export function useOrderTracking(orderId: string | undefined, handlers: Handlers
     setStatus('connecting');
 
     const subscribe = async () => {
+      if (orderId === null) {
+        // Feed mode: already in the personal/staff rooms once connected.
+        setStatus('live');
+        authRetries = 0;
+        if (subscribedBefore) handlersRef.current.onResync();
+        subscribedBefore = true;
+        return;
+      }
       try {
         const ack = (await socket
           .timeout(ACK_TIMEOUT_MS)
@@ -93,7 +102,7 @@ export function useOrderTracking(orderId: string | undefined, handlers: Handlers
       if (!socket.active) void renewAndReconnect();
     };
     const onStatus = (event: OrderStatusEvent) => {
-      if (event.orderId === orderId) handlersRef.current.onStatus(event);
+      if (orderId === null || event.orderId === orderId) handlersRef.current.onStatus(event);
     };
 
     // The browser knows about a network loss long before Socket.IO's ping timeout (~45 s) does.
@@ -125,7 +134,9 @@ export function useOrderTracking(orderId: string | undefined, handlers: Handlers
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);
       socket.off(TrackingEvents.status, onStatus);
-      if (socket.connected) socket.emit(TrackingEvents.unsubscribe, { orderId });
+      if (orderId !== null && socket.connected) {
+        socket.emit(TrackingEvents.unsubscribe, { orderId });
+      }
       releaseTrackingSocket();
     };
   }, [orderId]);

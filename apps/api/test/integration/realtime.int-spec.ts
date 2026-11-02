@@ -55,6 +55,25 @@ describe('Order tracking over Socket.IO (integration: 2 api instances + Redis ad
     return { id: paid.body.id as string, version: paid.body.version as number };
   };
 
+  /** Places an order now; paying is left to the caller (returns the version after payment). */
+  const paidOrderSteps = async (token: string) => {
+    await http
+      .put(`/api/cart/items/${productId}`)
+      .set(bearer(token))
+      .send({ quantity: 1 })
+      .expect(200);
+    const placed = await http
+      .post('/api/orders')
+      .set(bearer(token))
+      .set('Idempotency-Key', randomUUID())
+      .expect(201);
+    const id = placed.body.id as string;
+    const pay = async () =>
+      (await http.post(`/api/orders/${id}/pay`).set(bearer(token)).expect(200)).body
+        .version as number;
+    return { id, pay };
+  };
+
   const connect = (token?: string): Socket => {
     const socket = io(`${socketUrl}/tracking`, {
       auth: token ? { token } : {},
@@ -186,6 +205,7 @@ describe('Order tracking over Socket.IO (integration: 2 api instances + Redis ad
 
     expect(event).toEqual({
       orderId: anOrder.id,
+      code: expect.stringMatching(/^SF-/),
       status: 'PACKING',
       changedAt: expect.any(String),
       version: res.body.version,
@@ -230,5 +250,38 @@ describe('Order tracking over Socket.IO (integration: 2 api instances + Redis ad
     const shipped = nextStatus(socket);
     await moveTo(order.id, 'SHIPPED', first.body.version as number);
     await expect(shipped).resolves.toMatchObject({ orderId: order.id, status: 'SHIPPED' });
+  });
+
+  it('feeds list screens without subscribing: own orders for customers, every order for staff', async () => {
+    const an = await register();
+    const binh = await register();
+    const anSocket = connect(an.token); // e.g. "Đơn hàng của tôi"
+    const binhSocket = connect(binh.token);
+    const staffSocket = connect(warehouse); // the warehouse queue
+    await Promise.all([connected(anSocket), connected(binhSocket), connected(staffSocket)]);
+    const binhEvents: StatusEvent[] = [];
+    binhSocket.on('order:status', (event: StatusEvent) => binhEvents.push(event));
+
+    // A new order shows up in the warehouse queue and the customer's list.
+    const placedForStaff = nextStatus(staffSocket);
+    const placedForAn = nextStatus(anSocket);
+    const order = await paidOrderSteps(an.token);
+    await expect(placedForStaff).resolves.toMatchObject({
+      orderId: order.id,
+      code: expect.stringMatching(/^SF-/),
+      status: 'PENDING_PAYMENT',
+    });
+    await expect(placedForAn).resolves.toMatchObject({ orderId: order.id });
+
+    const paidVersion = await order.pay();
+    await new Promise((resolve) => setTimeout(resolve, 300)); // let the PAID events land first
+    const packingForAn = nextStatus(anSocket);
+    const packingForStaff = nextStatus(staffSocket);
+    await moveTo(order.id, 'PACKING', paidVersion);
+    await expect(packingForAn).resolves.toMatchObject({ orderId: order.id, status: 'PACKING' });
+    await expect(packingForStaff).resolves.toMatchObject({ orderId: order.id, status: 'PACKING' });
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(binhEvents).toEqual([]);
   });
 });

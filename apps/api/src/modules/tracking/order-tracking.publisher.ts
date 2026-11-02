@@ -5,5 +5,6 @@ import { OrderStatusEvent } from './tracking.events';
  * lossy channel: implementations must never throw (clients re-read the order over REST anyway).
  */
 export abstract class OrderTrackingPublisher {
-  abstract orderStatusChanged(event: OrderStatusEvent): void;
+  /** Placed or changed: reaches the order's room, its owner's sockets and every staff socket. */
+  abstract orderStatusChanged(event: OrderStatusEvent, ownerId: string): void;
 }

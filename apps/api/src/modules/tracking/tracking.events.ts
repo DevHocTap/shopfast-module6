@@ -17,6 +17,8 @@ export const TrackingEvents = {
 
 export interface OrderStatusEvent {
   orderId: string;
+  /** Human-readable order code (SF-XXXXXXXX), for list screens. */
+  code: string;
   status: OrderStatus;
   /** ISO time of the change (orders.updated_at). */
   changedAt: string;
@@ -31,3 +33,7 @@ export type SubscribeAck = { ok: true } | { ok: false; error: SubscribeError };
 export type HandshakeError = 'UNAUTHORIZED' | 'TOKEN_EXPIRED';
 
 export const orderRoom = (orderId: string): string => `order:${orderId}`;
+/** Joined automatically at connection: every change to the user's own orders (list screens). */
+export const userRoom = (userId: string): string => `user:${userId}`;
+/** Joined automatically by support, warehouse and admin sockets: every order change. */
+export const STAFF_ROOM = 'staff';

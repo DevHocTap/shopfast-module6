@@ -31,7 +31,9 @@ function fakeSocket(token?: unknown) {
     handshake: { auth: { token } },
     data: { session: { user: customer, expiresAt: Date.now() + 60_000 } },
     rooms,
-    join: jest.fn(async (room: string) => void rooms.add(room)),
+    join: jest.fn(async (room: string | string[]) => {
+      for (const name of [room].flat()) rooms.add(name);
+    }),
     leave: jest.fn(async (room: string) => void rooms.delete(room)),
     disconnect: jest.fn(),
   };
@@ -74,27 +76,49 @@ describe('TrackingGateway session lifetime', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
-  it('closes the socket when the access token expires', () => {
+  it('closes the socket when the access token expires', async () => {
     const { gateway } = setup();
     const socket = fakeSocket();
     socket.data.session.expiresAt = Date.now() + 5_000;
 
-    gateway.handleConnection(socket as never);
+    await gateway.handleConnection(socket as never);
     jest.advanceTimersByTime(4_999);
     expect(socket.disconnect).not.toHaveBeenCalled();
     jest.advanceTimersByTime(1);
     expect(socket.disconnect).toHaveBeenCalledWith(true);
   });
 
-  it('forgets the timer of a socket that left', () => {
+  it('forgets the timer of a socket that left', async () => {
     const { gateway } = setup();
     const socket = fakeSocket();
 
-    gateway.handleConnection(socket as never);
+    await gateway.handleConnection(socket as never);
     gateway.handleDisconnect(socket as never);
     jest.runAllTimers();
     expect(socket.disconnect).not.toHaveBeenCalled();
   });
+});
+
+describe('TrackingGateway personal rooms', () => {
+  it('puts a customer in their own room only', async () => {
+    const { gateway } = setup();
+    const socket = fakeSocket();
+    await gateway.handleConnection(socket as never);
+    expect(socket.join).toHaveBeenCalledWith('user:u1');
+    gateway.handleDisconnect(socket as never); // clears the expiry timer
+  });
+
+  it.each([Role.SUPPORT, Role.WAREHOUSE, Role.ADMIN])(
+    'puts %s in the staff room too',
+    async (role) => {
+      const { gateway } = setup();
+      const socket = fakeSocket();
+      socket.data.session.user = { ...customer, role };
+      await gateway.handleConnection(socket as never);
+      expect(socket.join).toHaveBeenCalledWith(['user:u1', 'staff']);
+      gateway.handleDisconnect(socket as never);
+    },
+  );
 });
 
 describe('TrackingGateway subscriptions', () => {
@@ -172,17 +196,18 @@ describe('TrackingGateway subscriptions', () => {
 describe('TrackingGateway as publisher', () => {
   const event = {
     orderId: ORDER_ID,
+    code: 'SF-TEST0001',
     status: OrderStatus.SHIPPED,
     changedAt: '2026-11-02T03:00:00.000Z',
     version: 4,
   };
 
-  it('emits only to the room of that order', () => {
+  it("emits to the order's watchers, its owner and staff — nobody else", () => {
     const { gateway, to, emit } = setup();
 
-    gateway.orderStatusChanged(event);
+    gateway.orderStatusChanged(event, 'u1');
 
-    expect(to).toHaveBeenCalledWith(`order:${ORDER_ID}`);
+    expect(to).toHaveBeenCalledWith([`order:${ORDER_ID}`, 'user:u1', 'staff']);
     expect(emit).toHaveBeenCalledWith('order:status', event);
   });
 
@@ -192,12 +217,12 @@ describe('TrackingGateway as publisher', () => {
       throw new Error('adapter broken');
     });
 
-    expect(() => gateway.orderStatusChanged(event)).not.toThrow();
+    expect(() => gateway.orderStatusChanged(event, 'u1')).not.toThrow();
   });
 
   it('does nothing in a process without a WebSocket server', () => {
     const gateway = new TrackingGateway({} as TrackingService);
 
-    expect(() => gateway.orderStatusChanged(event)).not.toThrow();
+    expect(() => gateway.orderStatusChanged(event, 'u1')).not.toThrow();
   });
 });

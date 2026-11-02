@@ -94,7 +94,7 @@ export function PageHeader({
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold">{title}</h1>
-        {description && <p className="mt-2 text-muted">{description}</p>}
+        {description && <div className="mt-2 text-muted">{description}</div>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>

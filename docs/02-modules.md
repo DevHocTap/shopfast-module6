@@ -107,8 +107,9 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
 - **Trách nhiệm:** gateway Socket.IO namespace `/tracking`.
 - **Xác thực:** middleware `io.use()` đọc `handshake.auth.token`, verify JWT → gắn `socket.data.user`; sai → `next(new Error('UNAUTHORIZED'))` (từ chối ngay khi bắt tay, không vào được namespace).
 - **Sự kiện client → server:** `order:subscribe { orderId }` (ack `{ ok }` hoặc `{ error: 'FORBIDDEN' }`), `order:unsubscribe`.
-- **Sự kiện server → client:** `order:status { orderId, status, changedAt, version }`.
+- **Sự kiện server → client:** `order:status { orderId, code, status, changedAt, version }`.
 - **Phân quyền:** khách chỉ join được room đơn của mình; SUPPORT/WAREHOUSE/ADMIN join mọi đơn.
+- **Room tự động khi kết nối:** `user:{id}` (mọi đơn của chính người đó) và, với nhân viên, `staff` (mọi đơn). Trang danh sách ("Đơn hàng của tôi", "Kho") chỉ cần nghe, không phải đăng ký từng đơn. Mỗi sự kiện được phát một lần tới `order:{id}` + `user:{chủ đơn}` + `staff`; đơn mới đặt cũng phát (`status: PENDING_PAYMENT`) để hàng đợi kho thấy ngay.
 - **Hạ tầng:** `@socket.io/redis-adapter` để 2 bản api cùng phát được trong lúc blue/green.
 - **Export:** port `OrderTrackingPublisher.orderStatusChanged(event)` (lớp trừu tượng, `TrackingGateway` hiện thực) — `OrdersService` gọi **sau commit** ở `pay`, `cancelByCustomer`, `changeStatusByStaff`; không bao giờ ném lỗi.
 - **Đã làm (Giai đoạn 4):**
@@ -116,7 +117,7 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
   - `connect_error`: `message` là mã máy (`UNAUTHORIZED` / `TOKEN_EXPIRED`), `data.message` là câu tiếng Việt.
   - Token chỉ hợp lệ lúc bắt tay → server tự đóng socket khi access token hết hạn; client làm mới token rồi kết nối lại.
   - Guard/interceptor HTTP toàn cục (`JwtAuthGuard`, `RolesGuard`, `ServerTimingInterceptor`) bỏ qua ngữ cảnh `ws` vì Nest cũng áp chúng cho handler WebSocket.
-  - Web: `lib/tracking.ts` (1 socket/tab, chỉ transport WebSocket để không cần sticky session khi blue/green), `lib/use-order-tracking.ts` (đăng ký lại mỗi lần `connect`, gọi REST bù sau khi kết nối lại hoặc khi trình duyệt báo `online`, bỏ sự kiện có `version` cũ), chỉ báo "Trạng thái tự cập nhật / Mất kết nối" trên trang chi tiết đơn.
+  - Web: `lib/tracking.ts` (1 socket/tab, chỉ transport WebSocket để không cần sticky session khi blue/green), `lib/use-order-tracking.ts` (đăng ký lại mỗi lần `connect`, gọi REST bù sau khi kết nối lại hoặc khi trình duyệt báo `online`, bỏ sự kiện có `version` cũ), `lib/use-order-feed.ts` cho trang danh sách (gộp nhiều sự kiện liên tiếp thành một lần tải lại trang hiện tại), chỉ báo `LiveIndicator` ("Tự cập nhật / Mất kết nối" + thay đổi gần nhất) trên trang chi tiết đơn, "Đơn hàng của tôi" và "Kho".
 
 ### C.9 `notifications` — F05.1, F05.3
 - **Trách nhiệm:** processor hàng đợi `email` (xác nhận đơn, nhắc thanh toán, OTP, báo cáo).

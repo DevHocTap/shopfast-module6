@@ -1,6 +1,7 @@
 import { Inbox } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, useSearchParams } from 'react-router-dom';
+import { LiveIndicator, OrderChange } from '../../components/LiveIndicator';
 import { Button, ButtonLink } from '../../components/ui/Button';
 import { ConfirmButton } from '../../components/ui/ConfirmButton';
 import { Pagination } from '../../components/ui/Pagination';
@@ -11,6 +12,7 @@ import { STATUS_LABEL, WAREHOUSE_CANCELLABLE, WAREHOUSE_NEXT } from '../../lib/o
 import { useToast } from '../../lib/toast';
 import type { OrderStatus, OrderSummary, Paginated } from '../../lib/types';
 import { useAsync } from '../../lib/use-async';
+import { useOrderFeed } from '../../lib/use-order-feed';
 import { OrderStatusBadge } from '../orders/OrderStatusBadge';
 
 /** Work queues in the order a warehouse handles them. */
@@ -54,6 +56,8 @@ export function WarehouseOrdersPage() {
       }),
     [status, page],
   );
+  // New orders and changes made by customers or other operators appear without a reload.
+  const live = useOrderFeed(() => void reload());
 
   async function move(order: OrderSummary, to: OrderStatus) {
     setBusyId(order.id);
@@ -80,7 +84,14 @@ export function WarehouseOrdersPage() {
     <>
       <PageHeader
         title="Kho"
-        description="Xử lý đơn theo thứ tự: đóng gói → giao vận chuyển → xác nhận đã giao."
+        description={
+          <>
+            Xử lý đơn theo thứ tự: đóng gói → giao vận chuyển → xác nhận đã giao.
+            <LiveIndicator status={live.status} className="mt-2">
+              {live.lastChange && <OrderChange event={live.lastChange} />}
+            </LiveIndicator>
+          </>
+        }
       />
       <WarehouseSubnav />
 
