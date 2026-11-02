@@ -1,5 +1,5 @@
 {
-  "$comment": "AI assistant evaluation (docs/06 §5). Placeholders: {{PAID}} {{SHIPPED}} {{OTHER}} are real order codes created by the runner; SKU-90001 is in stock, SKU-90002 is sold out. Grading is rule-based: tools that must / must not be called, text that must / must not appear, whether a proposal may be created.",
+  "$comment": "AI assistant evaluation. Placeholders: {{PAID}} {{SHIPPED}} {{OTHER}} are real order codes created by the runner; SKU-90001 is in stock, SKU-90002 is sold out. Grading is rule-based: tools that must / must not be called, text that must / must not appear, whether a proposal may be created.",
   "chat": [
     {
       "id": "lookup-paid",

@@ -5,7 +5,7 @@
 // Thresholds encode the SRS targets: cached lookups p95 < 50 ms. The cache hit ratio (≥ 80%) is
 // read afterwards from GET /api/admin/cache/stats (reset it before the run with DELETE).
 // Run it from inside the AWS region (EC2/CloudShell): from Vietnam, network latency to Sydney
-// alone exceeds 50 ms (docs/07 ADR-12). One source IP hits the per-IP limit (120 req/min), so set
+// alone exceeds 50 ms. One source IP hits the per-IP limit (120 req/min), so set
 // RATE_LIMIT_ENABLED=false for the measurement window, or keep VUs × rate under the limit.
 import http from 'k6/http';
 import { check } from 'k6';

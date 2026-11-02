@@ -44,5 +44,5 @@ done < "$WORK/expected.counts"
 
 DURATION=$(($(date +%s) - START))
 log "=== Restore drill finished in ${DURATION}s, $mismatches table(s) mismatched"
-log "Record the result in docs/runbooks/restore-drill-$(date -u +%F).md"
+log "Record the result in the restore drill log ($(date -u +%F))"
 [ "$mismatches" -eq 0 ]
