@@ -1,0 +1,53 @@
+name: Uptime
+
+# External monitoring (F07): probes production from GitHub's network every 10 minutes, so it
+# notices outages the server itself cannot report (instance down, DNS, TLS, Nginx).
+# A failed run e-mails the repository owner (GitHub notifications for scheduled workflows).
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe production health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APP_URL: https://${{ vars.APP_DOMAIN }}
+    steps:
+      - name: Readiness (database + Redis)
+        run: |
+          # Three tries 20 s apart: a blue/green switch or one slow request is not an outage.
+          for attempt in 1 2 3; do
+            code=$(curl -s -o body.json -w '%{http_code} %{time_total}' --max-time 10 "$APP_URL/api/health/ready" || echo "000 0")
+            status=$(jq -r '.status // "unknown"' body.json 2>/dev/null || echo unknown)
+            echo "attempt $attempt: HTTP ${code% *}, ${code#* }s, status=$status"
+            if [ "${code% *}" = "200" ]; then
+              echo "### ✅ ${APP_URL} — ${status} in ${code#* }s" >> "$GITHUB_STEP_SUMMARY"
+              # 'degraded' = Redis down but the shop still serves (fail-open): report, do not page.
+              [ "$status" = "degraded" ] && echo "::warning::Redis unavailable, running degraded"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "### ❌ ${APP_URL} not ready (last HTTP ${code% *})" >> "$GITHUB_STEP_SUMMARY"
+          cat body.json 2>/dev/null || true
+          exit 1
+
+      - name: Storefront and TLS certificate
+        run: |
+          host="${APP_URL#https://}"
+          curl -sf --max-time 10 -o /dev/null "$APP_URL/" || { echo "::error::storefront down"; exit 1; }
+          expiry=$(echo | openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null |
+            openssl x509 -noout -enddate | cut -d= -f2)
+          days=$(( ($(date -d "$expiry" +%s) - $(date +%s)) / 86400 ))
+          echo "TLS certificate expires in $days days ($expiry)" >> "$GITHUB_STEP_SUMMARY"
+          # certbot renews at 30 days left; under 14 means renewal is broken.
+          [ "$days" -ge 14 ] || { echo "::error::certificate expires in $days days"; exit 1; }

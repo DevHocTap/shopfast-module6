@@ -85,6 +85,16 @@ Tiêu chí "Bảo vệ quyết định kỹ thuật" là **điều kiện bắt 
 - **Quyết định:** `MailTransport` có ba bản cài, chọn bằng `MAIL_TRANSPORT`: `ses` (SESv2, credential tạm thời từ instance role), `smtp` (Gmail App Password đặt trong SSM, hoặc Mailpit khi chạy local), `log` (mặc định). Việc "chỉ gửi một lần" nằm ở `EmailSender` (bảng `email_logs`), không phụ thuộc nhà cung cấp.
 - **Đánh đổi:** worker chạy trong container, nên muốn lấy credential instance role thì phải nâng IMDSv2 hop limit từ 1 lên 2. Nâng như vậy thì mọi container trên máy đều đọc được credential của role. Role chỉ có quyền tối thiểu, và mạng `backend` là internal, nên chấp nhận được. Nếu không muốn nâng hop limit thì dùng `smtp`.
 
+### ADR-18 — LLM sau một port; Claude qua SDK chính thức
+- **Bối cảnh:** cần tool use + structured output cho phân loại; test không được gọi dịch vụ ngoài; khoá có thể chưa có hoặc hết hạn mức.
+- **Quyết định:** `LlmPort` (`runAgent`, `classify`) với `AnthropicLlmAdapter` (Claude Opus 5.5, tool `strict`, JSON schema cho phân loại, fallback phía server khi model từ chối), `DisabledLlm` khi thiếu khoá, `FakeLlm` có kịch bản cho test. Vòng lặp tool tự viết để lưu vết từng lời gọi và áp rào chắn đầu ra.
+- **Đánh đổi:** tự duy trì ~150 dòng adapter; đổi lại thay nhà cung cấp chỉ chạm một file và mọi test chạy không cần mạng.
+
+### ADR-19 — Giám sát uptime bằng GitHub Actions theo lịch
+- **Bối cảnh:** cần một bên **ngoài** EC2 kiểm tra trang; Route 53 health check đặt metric ở `us-east-1` (bị SCP chặn); không muốn thêm tài khoản dịch vụ thứ ba.
+- **Quyết định:** workflow `uptime.yml` chạy 10 phút/lần, thử lại 3 lần, kiểm tra cả hạn chứng chỉ TLS; lỗi → email của GitHub.
+- **Đánh đổi:** lịch của GitHub có thể trễ vài phút và không đảm bảo chính xác từng phút; đủ cho mức dịch vụ của đồ án.
+
 ### ADR-11 — Trợ lý AI chỉ được "đề xuất", con người "thực thi"
 - **Bối cảnh:** LLM có thể sai hoặc bị prompt injection; SRS bắt buộc người xác nhận thao tác ghi.
 - **Quyết định:** không có tool ghi; `propose_action` chỉ tạo bản ghi; thực thi bằng endpoint riêng, danh tính nhân viên, có audit.

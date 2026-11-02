@@ -12,3 +12,7 @@ Bộ tài liệu này được viết từ [SRS](../srs.md). Đọc theo thứ t
 | 05 | [Triển khai, CI/CD & vận hành](05-deployment-cicd.md) | Pipeline, triển khai blue/green, quay lui, IAM, secrets, sao lưu, giám sát |
 | 06 | [Chiến lược kiểm thử](06-testing-strategy.md) | Kiểm thử đơn vị, tích hợp, tải, đánh giá AI; cách đạt ngưỡng 60% |
 | 07 | [Quyết định kỹ thuật & xử lý sự cố](07-technical-decisions.md) | Vì sao chọn giải pháp này, khi hỏng thì hệ thống phản ứng thế nào (chuẩn bị bảo vệ) |
+| 08 | [Kịch bản demo 10 phút](08-demo-script.md) | Tài khoản, thao tác và ý cần nói theo từng phút |
+
+**Vận hành:** [runbooks/operations.md](runbooks/operations.md) (cảnh báo, uptime, diễn tập khôi phục, bằng chứng CI/CD) · [runbooks/ai-assistant.md](runbooks/ai-assistant.md) (bật trợ lý AI, bộ đánh giá) · [runbooks/seed-production.md](runbooks/seed-production.md).
+**Báo cáo:** [độ phủ kiểm thử](reports/coverage-2026-11-02.md) · [kiểm thử tải](reports/load-test-local-2026-10-31.md).
