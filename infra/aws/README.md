@@ -66,6 +66,5 @@ curl -sI http://<domain>/ | head -1         # 301 → https
 ```
 
 ## 9. Giám sát tối thiểu
-- [ ] CloudWatch alarm `StatusCheckFailed` của EC2 → SNS email.
-- [ ] CloudWatch alarm metric `ShopFast/BackupSucceeded` < 1 trong 26 giờ (treat missing data as breaching).
-- [ ] UptimeRobot (hoặc Route 53 health check) gọi `https://<domain>/api/health/ready` mỗi phút.
+- [ ] Chạy [`alarms.sh`](alarms.sh) từ CloudShell: SNS email + alarm status check (tự recover), CPU, `ShopFast/BackupSucceeded` thiếu 26 giờ. Chi tiết: [runbook vận hành](../../docs/runbooks/operations.md#1-cảnh-báo-cloudwatch).
+- [ ] Giám sát từ ngoài: workflow [`uptime.yml`](../../.github/workflows/uptime.yml) gọi `/api/health/ready` 10 phút/lần và kiểm tra hạn chứng chỉ TLS (Route 53 health check nằm ở `us-east-1`, bị SCP chặn).

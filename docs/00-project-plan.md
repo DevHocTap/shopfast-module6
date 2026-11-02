@@ -80,6 +80,8 @@ Mỗi giai đoạn kết thúc bằng một **PR được merge và tự triển
 - Tạo một PR có test hỏng có chủ đích → pipeline chặn merge (lưu link làm bằng chứng).
 - Hoàn thiện tài liệu kiến trúc, slide 10 phút, kịch bản demo, tập dượt trả lời câu hỏi (xem [07](07-technical-decisions.md)).
 
+> **Đã chuẩn bị trong repo:** [`infra/aws/alarms.sh`](../infra/aws/alarms.sh), workflow [`uptime.yml`](../.github/workflows/uptime.yml), [báo cáo độ phủ](reports/coverage-2026-11-02.md), [kịch bản demo](08-demo-script.md), [runbook vận hành](runbooks/operations.md) gồm mẫu biên bản diễn tập khôi phục và cách tạo bằng chứng PR bị chặn / tự quay lui. Các bước chạy trên AWS và GitHub (tạo alarm, diễn tập thật, mở PR test hỏng) làm theo runbook đó.
+
 > **Thứ tự ưu tiên khi thiếu thời gian:** G0 → G1 → G2 → G3 → G4 → G6 → G5. Bảng chấm cần tối thiểu 5 chủ đề;
 > hạ tầng (G0, G6) và nghiệp vụ lõi (G1) là bắt buộc để có bất kỳ điểm nào.
 
