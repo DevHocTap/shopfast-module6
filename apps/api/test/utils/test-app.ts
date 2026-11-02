@@ -1,5 +1,5 @@
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { Test } from '@nestjs/testing';
+import { Test, TestingModuleBuilder } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import Redis from 'ioredis';
 import request from 'supertest';
@@ -10,6 +10,11 @@ import { createDataSource } from '../../src/infra/database/data-source';
 import { REDIS_CLIENT } from '../../src/infra/redis/redis.constants';
 
 const TABLES = [
+  'audit_logs',
+  'agent_actions',
+  'assistant_messages',
+  'ticket_messages',
+  'tickets',
   'outbox_events',
   'email_logs',
   'invoices',
@@ -36,7 +41,10 @@ const TABLES = [
  * refuse to run unless the database name ends with `_test` (never the dev or prod database).
  *   local: DB_NAME=shopfast_test pnpm --filter api test:int
  */
-export async function createTestApp(): Promise<{
+export async function createTestApp(
+  /** Replace providers, e.g. the LLM with a scripted FakeLlm. */
+  override: (builder: TestingModuleBuilder) => TestingModuleBuilder = (builder) => builder,
+): Promise<{
   app: NestExpressApplication;
   dataSource: DataSource;
 }> {
@@ -51,7 +59,7 @@ export async function createTestApp(): Promise<{
   await migrator.runMigrations({ transaction: 'each' });
   await migrator.destroy();
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const moduleRef = await override(Test.createTestingModule({ imports: [AppModule] })).compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: ['error'] });
   configureApp(app);
   await app.init();

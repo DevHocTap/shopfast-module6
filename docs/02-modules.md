@@ -180,6 +180,14 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
   3. Nội dung ticket của khách đưa vào prompt trong khối dữ liệu có đánh dấu, không phải chỉ dẫn (chống prompt injection).
   4. Không tool nào có quyền ghi; hành động chỉ chạy khi nhân viên bấm duyệt, thực thi bằng danh tính nhân viên, ghi `audit_logs`.
 - **Lưu vết:** mỗi lượt chat lưu vào `assistant_messages` (dùng để xem lại và đánh giá).
+- **Đã làm (Giai đoạn 5):**
+  - `infra/llm`: port `LlmPort` (`runAgent` với vòng lặp tool, `classify` với structured output). `AnthropicLlmAdapter` dùng SDK chính thức, model `LLM_MODEL` (mặc định `claude-opus-5-5`), adaptive thinking, effort `medium` cho chat và `low` cho phân loại, tool `strict: true`, **fallback phía server** (`fallbacks: "default"`) khi model từ chối vì lý do an toàn. Không có `ANTHROPIC_API_KEY` → `DisabledLlm`: giao diện báo "Tạm ngưng", ticket vào `UNCLASSIFIED`. Test dùng `FakeLlm` có kịch bản.
+  - Tool thực tế: `get_order_status`, `check_inventory` (chỉ đọc) và `propose_action` (chỉ ghi một **đề xuất**; tối đa 1 đề xuất mỗi câu trả lời; chỉ cho đơn của chính khách mở ticket; chỉ khi đơn còn huỷ được). Hành động duy nhất: `CANCEL_ORDER`.
+  - Duyệt: `POST /assistant/actions/:id/approve` chiếm quyền bằng `UPDATE … WHERE status = 'PROPOSED'` (hai người bấm cùng lúc chỉ một người thực thi), huỷ đơn qua `OrdersService.changeStatusByStaff` dưới danh tính người duyệt (có hoàn kho + realtime), ghi `audit_logs`. Đơn đã đổi trạng thái → `FAILED` kèm lý do.
+  - Rào chắn đầu ra (`output-guard.ts`): câu trả lời nêu mã đơn **và** một trạng thái đơn mà mã đó chưa được tra trong lượt → thay bằng câu "cần tra cứu trước". Nội dung ticket bọc trong `<ticket_data>`, ký tự `< >` của khách bị vô hiệu hoá để không đóng khối dữ liệu.
+  - Phân loại: `TicketCreated` (outbox) → hàng đợi `ai` → `AiClassifyProcessor`. Chỉ ghi khi `category IS NULL` (chạy lại hay nhân viên đã chọn nhóm → không ghi đè). Lỗi tạm thời → BullMQ retry; lần thử cuối → `UNCLASSIFIED`.
+  - Web: khách — `/support` (danh sách, tạo yêu cầu, có thể gắn đơn; nút "Cần hỗ trợ" ở trang đơn); nhân viên — `/desk` (hàng đợi lọc theo nhóm/trạng thái, đề xuất chờ duyệt) và `/desk/:id` (hội thoại với khách + khung Trợ lý AI: gợi ý câu hỏi, các tool đã gọi, cảnh báo khi câu trả lời bị thay, "Dùng làm câu trả lời", Duyệt/Từ chối).
+  - Bộ đánh giá: `test/ai-eval` (xem [runbook](runbooks/ai-assistant.md)).
 
 ### C.16 `health` — F07.1
 - `GET /health/live` → tiến trình còn sống (Docker healthcheck).

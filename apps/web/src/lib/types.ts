@@ -111,7 +111,8 @@ export interface CacheStats {
   redis: 'closed' | 'open' | 'half-open';
 }
 
-export type QueueName = 'email' | 'invoice' | 'inventory-sync' | 'payment-reminder' | 'report';
+export type QueueName =
+  'email' | 'invoice' | 'inventory-sync' | 'payment-reminder' | 'report' | 'ai';
 
 export interface QueueCounts {
   name: QueueName;
@@ -143,4 +144,86 @@ export interface DailyRevenue {
   date: string;
   orderCount: number;
   revenue: number;
+}
+
+/* ---------- Support & AI assistant (F01) ---------- */
+
+export type TicketCategory =
+  | 'ORDER_STATUS'
+  | 'SHIPPING'
+  | 'PAYMENT'
+  | 'RETURN_REFUND'
+  | 'PRODUCT_INFO'
+  | 'ACCOUNT'
+  | 'OTHER'
+  | 'UNCLASSIFIED';
+
+export type TicketStatus = 'OPEN' | 'ANSWERED' | 'CLOSED';
+
+export interface TicketSummary {
+  id: string;
+  code: string;
+  subject: string;
+  status: TicketStatus;
+  /** null until the background classifier has run. */
+  category: TicketCategory | null;
+  categoryConfidence: number | null;
+  order: { id: string; code: string } | null;
+  customer: { id: string; email: string; fullName: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketMessage {
+  id: string;
+  fromStaff: boolean;
+  author: { id: string; fullName: string };
+  body: string;
+  createdAt: string;
+}
+
+export interface TicketDetail extends TicketSummary {
+  messages: TicketMessage[];
+}
+
+export type AgentActionStatus = 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED';
+
+export interface AgentAction {
+  id: string;
+  type: 'CANCEL_ORDER';
+  status: AgentActionStatus;
+  reason: string;
+  ticket: { id: string; code: string };
+  order: { id: string; code: string };
+  reviewedBy: { id: string; fullName: string } | null;
+  reviewedAt: string | null;
+  result: string | null;
+  createdAt: string;
+}
+
+export interface ToolCall {
+  name: string;
+  input: Record<string, unknown>;
+  isError: boolean;
+}
+
+export interface AssistantTurn {
+  role: 'user' | 'assistant';
+  content: string;
+  toolCalls: ToolCall[];
+  guarded: boolean;
+  createdAt: string;
+}
+
+export interface ChatResult {
+  reply: string;
+  guarded: boolean;
+  toolCalls: ToolCall[];
+  actions: AgentAction[];
+}
+
+export interface Conversation {
+  available: boolean;
+  turns: AssistantTurn[];
+  actions: AgentAction[];
 }

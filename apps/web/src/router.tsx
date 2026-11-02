@@ -11,6 +11,9 @@ import { CatalogPage } from './features/catalog/CatalogPage';
 import { ProductDetailPage } from './features/catalog/ProductDetailPage';
 import { OrderDetailPage } from './features/orders/OrderDetailPage';
 import { OrdersPage } from './features/orders/OrdersPage';
+import { NewTicketPage, SupportPage, TicketPage } from './features/support/SupportPages';
+import { DeskTicketPage } from './features/support-desk/DeskTicketPage';
+import { SupportDeskPage } from './features/support-desk/SupportDeskPage';
 import { SystemStatusPage } from './features/system-status/SystemStatusPage';
 import { InventoryPage } from './features/warehouse/InventoryPage';
 import { WarehouseOrdersPage } from './features/warehouse/WarehouseOrdersPage';
@@ -72,6 +75,46 @@ export const router = createBrowserRouter(
           element: (
             <RequireAuth roles={['WAREHOUSE', 'ADMIN']}>
               <InventoryPage />
+            </RequireAuth>
+          ),
+        },
+        {
+          path: 'support',
+          element: (
+            <RequireAuth roles={['CUSTOMER']}>
+              <SupportPage />
+            </RequireAuth>
+          ),
+        },
+        {
+          path: 'support/new',
+          element: (
+            <RequireAuth roles={['CUSTOMER']}>
+              <NewTicketPage />
+            </RequireAuth>
+          ),
+        },
+        {
+          path: 'support/:id',
+          element: (
+            <RequireAuth roles={['CUSTOMER']}>
+              <TicketPage />
+            </RequireAuth>
+          ),
+        },
+        {
+          path: 'desk',
+          element: (
+            <RequireAuth roles={['SUPPORT', 'ADMIN']}>
+              <SupportDeskPage />
+            </RequireAuth>
+          ),
+        },
+        {
+          path: 'desk/:id',
+          element: (
+            <RequireAuth roles={['SUPPORT', 'ADMIN']}>
+              <DeskTicketPage />
             </RequireAuth>
           ),
         },

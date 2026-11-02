@@ -6,11 +6,13 @@ import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { CacheModule } from './infra/cache/cache.module';
 import { AppConfigModule } from './infra/config/config.module';
 import { DatabaseModule } from './infra/database/database.module';
+import { LlmModule } from './infra/llm/llm.module';
 import { LoggerModule } from './infra/logger/logger.module';
 import { OutboxModule } from './infra/outbox/outbox.module';
 import { QueueModule } from './infra/queue/queue.module';
 import { RedisModule } from './infra/redis/redis.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CartModule } from './modules/cart/cart.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
@@ -18,6 +20,7 @@ import { HealthModule } from './modules/health/health.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { SupportModule } from './modules/support/support.module';
 import { UsersModule } from './modules/users/users.module';
 
 /** Modules loaded by the `api` process (HTTP + WebSocket). */
@@ -32,6 +35,7 @@ import { UsersModule } from './modules/users/users.module';
     OutboxModule,
     // Producers inside HTTP requests: fail fast instead of hanging when Redis is down.
     QueueModule.forRoot({ failFast: true }),
+    LlmModule,
     HealthModule,
     AuthModule,
     UsersModule,
@@ -41,6 +45,8 @@ import { UsersModule } from './modules/users/users.module';
     OrdersModule,
     InvoicesModule,
     AdminModule,
+    SupportModule,
+    AiAssistantModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
