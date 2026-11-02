@@ -6,7 +6,7 @@ import { Test } from '@nestjs/testing';
 import { Queue } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { LogMailTransport, MAIL_TRANSPORT } from '../../src/infra/mail/mail.transport';
-import { QUEUES } from '../../src/infra/queue/queue.constants';
+import { QUEUE_NAMES, QUEUES } from '../../src/infra/queue/queue.constants';
 import { EmailProcessor } from '../../src/modules/notifications/email.processor';
 import {
   PARTNER_CLIENT,
@@ -193,7 +193,7 @@ describe('Background jobs (integration: API + worker, real PostgreSQL + Redis + 
     });
 
     const stats = await http.get('/api/admin/queues').set(bearer(admin.token)).expect(200);
-    expect(stats.body.queues).toHaveLength(5);
+    expect(stats.body.queues).toHaveLength(QUEUE_NAMES.length);
     expect(stats.body.pendingOutboxEvents).toBe(0);
   }, 60_000);
 

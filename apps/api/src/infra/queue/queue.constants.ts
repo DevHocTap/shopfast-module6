@@ -6,6 +6,7 @@ export const QUEUES = {
   inventorySync: 'inventory-sync',
   paymentReminder: 'payment-reminder',
   report: 'report',
+  ai: 'ai',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -32,6 +33,8 @@ export const JOB_OPTIONS: Record<QueueName, JobsOptions> = {
     ...keep,
   },
   [QUEUES.report]: { attempts: 3, backoff: { type: 'exponential', delay: 60_000 }, ...keep },
+  // LLM provider hiccups (overload, rate limit): a few spaced retries, then UNCLASSIFIED.
+  [QUEUES.ai]: { attempts: 3, backoff: { type: 'exponential', delay: 30_000 }, ...keep },
 };
 
 /**

@@ -127,6 +127,11 @@ export function OrderDetailPage() {
               Thanh toán {formatVND(order.total)}
             </Button>
           )}
+          {isOwner && (
+            <ButtonLink to={`/support/new?orderId=${order.id}`} variant="secondary">
+              Cần hỗ trợ
+            </ButtonLink>
+          )}
           {isOwner && CUSTOMER_CANCELLABLE.includes(order.status) && (
             <ConfirmButton
               label="Huỷ đơn"

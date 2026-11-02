@@ -2,6 +2,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { ModuleRef } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { DeadLetterService } from '../../infra/queue/dead-letter.service';
+import { QUEUE_NAMES } from '../../infra/queue/queue.constants';
 import { ReportsRepository } from '../reports/reports.repository';
 import { AdminJobsService } from './admin-jobs.service';
 
@@ -33,7 +34,7 @@ describe('AdminJobsService', () => {
     const stats = await service.queueStats();
 
     expect(stats.pendingOutboxEvents).toBe(4);
-    expect(stats.queues).toHaveLength(5);
+    expect(stats.queues).toHaveLength(QUEUE_NAMES.length);
     expect(stats.queues[0]).toMatchObject({
       waiting: 2,
       active: 1,

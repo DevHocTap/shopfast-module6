@@ -45,6 +45,9 @@ export const POLICIES = {
     windowMs: MINUTE,
     key: (s) => (s.voucherCode ? userOrIp(s) : null),
   },
+
+  /** AI assistant: each call costs money at the LLM provider. Per staff member. */
+  ai: { limit: 20, windowMs: MINUTE, key: userOrIp },
 } satisfies Record<string, RateLimitPolicy>;
 
 export type PolicyName = keyof typeof POLICIES;

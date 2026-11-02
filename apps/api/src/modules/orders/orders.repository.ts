@@ -95,6 +95,14 @@ export class OrdersRepository {
     return rows[0]?.id ?? null;
   }
 
+  async findIdByCode(code: string): Promise<string | null> {
+    const rows: { id: string }[] = await this.dataSource.query(
+      'SELECT id FROM orders WHERE code = $1',
+      [code],
+    );
+    return rows[0]?.id ?? null;
+  }
+
   async insertOrder(tx: Tx, order: NewOrder): Promise<string> {
     const rows: { id: string }[] = await tx.query(
       `INSERT INTO orders (code, user_id, subtotal, discount, total, idempotency_key, voucher_code)

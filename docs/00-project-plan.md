@@ -72,6 +72,8 @@ Mỗi giai đoạn kết thúc bằng một **PR được merge và tự triển
 
 **Định nghĩa hoàn thành:** bộ đánh giá pass ≥ 90%; mọi hành động ghi đều có bản ghi `agent_actions` với người duyệt.
 
+> **Kiểm chứng:** `test/integration/support-assistant.int-spec.ts` (model giả lập có kịch bản, DB thật): ticket → sự kiện outbox → phân loại một lần; ticket riêng tư, trợ lý chỉ cho SUPPORT/ADMIN; câu trả lời lấy từ đơn thật, câu bịa trạng thái bị thay; đề xuất huỷ chỉ thành hiện thực khi nhân viên duyệt (audit ghi người duyệt), duyệt lần hai → 409; kể cả khi model "nghe theo" nội dung độc hại trong ticket, tool vẫn từ chối huỷ đơn của khách khác. Bộ đánh giá với model thật: `pnpm --filter api ai:eval` (20 tình huống hội thoại + 15 ticket phân loại).
+
 ### Giai đoạn 6 — Hoàn thiện vận hành & bàn giao (F07)
 - Sao lưu hằng ngày lên S3 + **diễn tập khôi phục thật** (ghi biên bản, đo thời gian < 30 phút).
 - CloudWatch alarm + giám sát uptime bên ngoài; báo cáo độ phủ kiểm thử.
