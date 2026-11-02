@@ -38,7 +38,8 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
 | `outbox` | `OutboxService.add(tx, event)` (gọi trong transaction); `OutboxRelay` quét & đẩy sang BullMQ | `FOR UPDATE SKIP LOCKED`, quét mỗi 1 s, batch 100 | add: A · relay: W |
 | `llm` | `LlmPort` (chat + tool use + structured output); `AnthropicLlmAdapter`; `FakeLlmAdapter` cho test | Timeout 20 s, giới hạn số vòng tool (≤ 5) | A, W |
 | `mail` | `MailTransport` chọn bằng `MAIL_TRANSPORT`: `ses` (AWS SESv2, credential từ instance role), `smtp` (Mailpit local hoặc Gmail), `log` (chỉ ghi log — mặc định, dùng cho test) | Lỗi gửi ném ra để BullMQ retry; `EmailSender` đảm bảo mỗi email chỉ gửi một lần | W |
-| `realtime-emitter` | Phát sự kiện Socket.IO từ worker qua `@socket.io/redis-emitter` | — | W |
+| `realtime` | `RedisIoAdapter`: Socket.IO dùng chung cổng HTTP, phát chéo giữa các bản api qua Redis pub/sub. Publisher fail-fast (lỗi `publish` bị nuốt → không có unhandled rejection), subscriber xếp hàng lệnh và tự đăng ký lại khi Redis sống lại | Redis chết → mỗi bản api vẫn phát cho socket của chính nó | A |
+| `realtime-emitter` | *(chưa làm — hiện worker không đổi trạng thái đơn)* Phát sự kiện Socket.IO từ worker qua `@socket.io/redis-emitter`, khi có job tự huỷ đơn quá hạn | — | W |
 
 ## B. Xuyên suốt (`src/common`)
 
@@ -109,7 +110,13 @@ Ký hiệu cột **Chạy ở**: `A` = tiến trình api, `W` = tiến trình wo
 - **Sự kiện server → client:** `order:status { orderId, status, changedAt, version }`.
 - **Phân quyền:** khách chỉ join được room đơn của mình; SUPPORT/WAREHOUSE/ADMIN join mọi đơn.
 - **Hạ tầng:** `@socket.io/redis-adapter` để 2 bản api cùng phát được trong lúc blue/green.
-- **Export:** `TrackingPublisher.orderStatusChanged(order)` cho `orders` gọi.
+- **Export:** port `OrderTrackingPublisher.orderStatusChanged(event)` (lớp trừu tượng, `TrackingGateway` hiện thực) — `OrdersService` gọi **sau commit** ở `pay`, `cancelByCustomer`, `changeStatusByStaff`; không bao giờ ném lỗi.
+- **Đã làm (Giai đoạn 4):**
+  - Ack: `{ ok: true }` hoặc `{ ok: false, error: 'BAD_REQUEST' | 'FORBIDDEN' | 'TOO_MANY_SUBSCRIPTIONS' | 'INTERNAL' }`. Đơn không tồn tại cũng trả `FORBIDDEN` (không lộ đơn nào có thật). Mỗi socket theo dõi tối đa 20 đơn.
+  - `connect_error`: `message` là mã máy (`UNAUTHORIZED` / `TOKEN_EXPIRED`), `data.message` là câu tiếng Việt.
+  - Token chỉ hợp lệ lúc bắt tay → server tự đóng socket khi access token hết hạn; client làm mới token rồi kết nối lại.
+  - Guard/interceptor HTTP toàn cục (`JwtAuthGuard`, `RolesGuard`, `ServerTimingInterceptor`) bỏ qua ngữ cảnh `ws` vì Nest cũng áp chúng cho handler WebSocket.
+  - Web: `lib/tracking.ts` (1 socket/tab, chỉ transport WebSocket để không cần sticky session khi blue/green), `lib/use-order-tracking.ts` (đăng ký lại mỗi lần `connect`, gọi REST bù sau khi kết nối lại hoặc khi trình duyệt báo `online`, bỏ sự kiện có `version` cũ), chỉ báo "Trạng thái tự cập nhật / Mất kết nối" trên trang chi tiết đơn.
 
 ### C.9 `notifications` — F05.1, F05.3
 - **Trách nhiệm:** processor hàng đợi `email` (xác nhận đơn, nhắc thanh toán, OTP, báo cáo).

@@ -24,6 +24,10 @@ export function setTokenSource(source: TokenSource): void {
   tokenSource = source;
 }
 
+/** For the Socket.IO handshake, which sends the same access token as the REST calls. */
+export const currentAccessToken = (): string | null => tokenSource.current();
+export const refreshAccessToken = (): Promise<string | null> => tokenSource.refresh();
+
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;

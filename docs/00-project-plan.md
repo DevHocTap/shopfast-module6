@@ -64,6 +64,8 @@ Mỗi giai đoạn kết thúc bằng một **PR được merge và tự triển
 
 **Định nghĩa hoàn thành:** kho đổi trạng thái → màn hình khách cập nhật < 1 s; khách B không nhận được sự kiện đơn của khách A; tắt mạng 10 s rồi bật lại → vẫn nhận cập nhật.
 
+> **Kiểm chứng:** `test/integration/realtime.int-spec.ts` chạy **2 bản api** chung PostgreSQL + Redis (request vào bản A, socket ở bản B): từ chối bắt tay không token, khách B bị `FORBIDDEN`, sự kiện tới < 1 s và không lọt sang khách B, rớt transport → tự kết nối, đăng ký lại và nhận sự kiện kế tiếp.
+
 ### Giai đoạn 5 — Trợ lý AI cho CSKH (F01)
 - `support` (ticket + tin nhắn), `ai-assistant` (phân loại ticket, agent có 2 tool tra cứu, đề xuất hành động ghi chờ duyệt).
 - Bộ đánh giá AI (~20 tình huống): ngoài phạm vi, bịa đơn hàng, prompt injection.

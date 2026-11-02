@@ -9,6 +9,8 @@ import { Observable, tap } from 'rxjs';
 @Injectable()
 export class ServerTimingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    // Global interceptors also wrap WebSocket handlers, which have no HTTP response.
+    if (context.getType() !== 'http') return next.handle();
     const startedAt = process.hrtime.bigint();
     const response = context.switchToHttp().getResponse<Response>();
     return next.handle().pipe(

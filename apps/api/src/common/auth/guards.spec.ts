@@ -6,8 +6,9 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { Role } from './role.enum';
 import { RolesGuard } from './roles.guard';
 
-function context(request: Record<string, unknown>): ExecutionContext {
+function context(request: Record<string, unknown>, type = 'http'): ExecutionContext {
   return {
+    getType: () => type,
     getHandler: () => undefined,
     getClass: () => undefined,
     switchToHttp: () => ({ getRequest: () => request }),
@@ -65,6 +66,12 @@ describe('JwtAuthGuard', () => {
         context({ headers: { authorization: 'Bearer bad' } }),
       ),
     ).resolves.toBe(true);
+  });
+
+  it('leaves WebSocket messages to the handshake authentication', async () => {
+    const verify = jest.fn();
+    await expect(guard({}, verify).canActivate(context({}, 'ws'))).resolves.toBe(true);
+    expect(verify).not.toHaveBeenCalled();
   });
 });
 

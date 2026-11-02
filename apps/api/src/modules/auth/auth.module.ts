@@ -37,5 +37,6 @@ import { RefreshTokenEntity } from './refresh-token.entity';
     { provide: APP_GUARD, useExisting: RateLimitGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
+  exports: [JwtModule],
 })
 export class AuthModule {}

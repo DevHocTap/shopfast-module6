@@ -33,7 +33,13 @@ const head = (overrides: Partial<OrderHead> = {}): OrderHead => ({
 });
 
 function setup() {
-  const detail = { id: 'o1', customer: { id: 'u1' } } as OrderDetail;
+  const detail = {
+    id: 'o1',
+    customer: { id: 'u1' },
+    status: OrderStatus.PAID,
+    version: 2,
+    updatedAt: new Date('2026-11-02T03:00:00.000Z'),
+  } as OrderDetail;
   const orders = {
     findIdByIdempotencyKey: jest.fn().mockResolvedValue(null),
     insertOrder: jest.fn().mockResolvedValue('o1'),
@@ -57,6 +63,7 @@ function setup() {
   const tx = { run: jest.fn((work: (t: unknown) => Promise<unknown>) => work(TX)) };
   const productCache = { stockChanged: jest.fn() };
   const outbox = { add: jest.fn() };
+  const tracking = { orderStatusChanged: jest.fn() };
   const service = new OrdersService(
     orders as unknown as OrdersRepository,
     inventory as unknown as InventoryRepository,
@@ -64,8 +71,9 @@ function setup() {
     tx as unknown as TransactionRunner,
     productCache as unknown as ProductCache,
     outbox,
+    tracking,
   );
-  return { service, orders, inventory, cart, tx, detail, productCache, outbox };
+  return { service, orders, inventory, cart, tx, detail, productCache, outbox, tracking };
 }
 
 describe('OrdersService.placeOrder', () => {
@@ -251,14 +259,34 @@ describe('OrdersService status changes', () => {
     expect(orders.updateStatus).toHaveBeenCalledWith(TX, 'o1', OrderStatus.PAID);
   });
 
+  it('pushes the committed status to order watchers, after the transaction', async () => {
+    const { service, orders, tx, tracking } = setup();
+    orders.lock.mockResolvedValue(head());
+    tracking.orderStatusChanged.mockImplementation(() => {
+      // The transaction callback has already resolved when the event goes out.
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      expect(orders.detail).toHaveBeenCalled();
+    });
+
+    await service.pay(customer, 'o1');
+
+    expect(tracking.orderStatusChanged).toHaveBeenCalledWith({
+      orderId: 'o1',
+      status: OrderStatus.PAID,
+      changedAt: '2026-11-02T03:00:00.000Z',
+      version: 2,
+    });
+  });
+
   it('refuses to pay an order that is not pending', async () => {
-    const { service, orders } = setup();
+    const { service, orders, tracking } = setup();
     orders.lock.mockResolvedValue(head({ status: OrderStatus.PAID }));
 
     await expect(service.pay(customer, 'o1')).rejects.toMatchObject({
       response: { code: 'INVALID_TRANSITION' },
     });
     expect(orders.insertPayment).not.toHaveBeenCalled();
+    expect(tracking.orderStatusChanged).not.toHaveBeenCalled();
   });
 
   it("hides other customers' orders as not found", async () => {
@@ -307,16 +335,17 @@ describe('OrdersService status changes', () => {
   });
 
   it('applies a warehouse change when the version matches', async () => {
-    const { service, orders } = setup();
+    const { service, orders, tracking } = setup();
     orders.lock.mockResolvedValue(head({ status: OrderStatus.PAID, version: 3 }));
 
     await service.changeStatusByStaff(warehouse, 'o1', OrderStatus.PACKING, 3);
 
     expect(orders.updateStatus).toHaveBeenCalledWith(TX, 'o1', OrderStatus.PACKING);
+    expect(tracking.orderStatusChanged).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a warehouse change based on a stale version', async () => {
-    const { service, orders } = setup();
+    const { service, orders, tracking } = setup();
     orders.lock.mockResolvedValue(head({ status: OrderStatus.PAID, version: 4 }));
 
     await expect(
@@ -324,6 +353,7 @@ describe('OrdersService status changes', () => {
     ).rejects.toMatchObject({
       response: { code: 'STALE_ORDER' },
     });
+    expect(tracking.orderStatusChanged).not.toHaveBeenCalled();
   });
 
   it('rejects skipping steps and non-warehouse targets', async () => {

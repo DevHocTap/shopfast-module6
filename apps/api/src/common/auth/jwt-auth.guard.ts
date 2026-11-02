@@ -18,6 +18,9 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Global guards also run for WebSocket handlers; sockets authenticate once, at the handshake
+    // (TrackingGateway middleware), so there is no per-message HTTP header to check here.
+    if (context.getType() !== 'http') return true;
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
