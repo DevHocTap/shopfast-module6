@@ -1,5 +1,5 @@
 /**
- * AI assistant evaluation (docs/06 §5) — real model, real code path, rule-based grading.
+ * AI assistant evaluation — real model, real code path, rule-based grading.
  *
  *   DB_NAME=shopfast_test REDIS_DB=1 ANTHROPIC_API_KEY=... pnpm --filter api ai:eval
  *   ... ai:eval --fake        dry run with a scripted model (checks the harness, costs nothing)

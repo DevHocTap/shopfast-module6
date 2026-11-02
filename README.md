@@ -1,49 +1,31 @@
 # ShopFast
 
-Backend sàn thương mại điện tử cho ~200.000 khách hàng — Defense Case Study 6 (Module 6).
-NestJS 10 · Node.js 20 · PostgreSQL 16 · Redis 7 · Docker Compose · GitHub Actions · AWS EC2.
+Backend cho một sàn thương mại điện tử quy mô khoảng 200.000 khách hàng, kèm giao diện web để
+mua sắm, theo dõi đơn hàng và vận hành.
 
-- Đề bài: [srs.md](srs.md)
-- Kiến trúc, module, kế hoạch: [docs/](docs/README.md)
-- Dựng hạ tầng AWS: [infra/aws/README.md](infra/aws/README.md)
+Bản chạy thật: https://shopfast.hmicodev.io.vn
 
-## Chạy cục bộ
+## Chức năng chính
 
-Yêu cầu: Node.js ≥ 20, Docker Desktop, pnpm 9 (`corepack enable` — hoặc gọi `corepack pnpm@9.15.4 …`).
+- **Mua sắm:** danh mục có lọc và phân trang, giỏ hàng, đặt đơn không bán vượt tồn kho, mã giảm giá.
+- **Theo dõi đơn hàng trực tiếp:** trạng thái đơn tự cập nhật trên màn hình, không cần tải lại trang.
+- **Kho:** hàng đợi đơn cần xử lý, cập nhật trạng thái giao hàng, kiểm kê tồn kho.
+- **Chăm sóc khách hàng:** ticket hỗ trợ, trợ lý AI tra cứu đơn và tồn kho; mọi thao tác thay đổi
+  dữ liệu đều do nhân viên duyệt.
+- **Tác vụ nền:** email xác nhận, hoá đơn, đồng bộ tồn kho với đối tác, nhắc thanh toán, báo cáo
+  doanh thu hằng đêm, có thử lại tự động.
+- **Bảo vệ và hiệu năng:** giới hạn tần suất truy cập, khoá chống dò mật khẩu, bộ nhớ đệm cho dữ
+  liệu sản phẩm.
 
-```bash
-pnpm install
-cp apps/api/.env.example apps/api/.env
-pnpm infra:up          # PostgreSQL :5432, Redis :6379, Mailpit http://localhost:8025
-pnpm db:migrate
-pnpm --filter api seed   # 1.000 sản phẩm, 204 tài khoản, 3.000 đơn demo
-pnpm dev:api           # http://localhost:3000/api/health/ready · Swagger http://localhost:3000/api/docs
-pnpm dev:worker        # tiến trình nền
-pnpm dev:web           # http://localhost:5173
-```
+## Công nghệ
 
-## Lệnh thường dùng
-
-| Lệnh | Việc |
-|------|------|
-| `pnpm lint` / `pnpm typecheck` / `pnpm format` | Chất lượng mã |
-| `pnpm test` / `pnpm test:cov` | Unit test (ngưỡng coverage 60% tầng nghiệp vụ) |
-| `DB_NAME=shopfast_test pnpm test:int` | Integration test trên Postgres/Redis thật — cần `pnpm infra:up` và database `shopfast_test` (test từ chối chạy nếu tên DB không kết thúc bằng `_test`) |
-| `pnpm --filter api seed` | Nạp dữ liệu demo (cần `SEED_DEMO_PASSWORD`) — production: [docs/runbooks/seed-production.md](docs/runbooks/seed-production.md) |
-| `pnpm --filter api migration:generate src/infra/database/migrations/<Name>` | Sinh migration từ entity |
+NestJS · TypeScript · PostgreSQL · Redis · BullMQ · Socket.IO · React + Vite · Docker ·
+GitHub Actions · AWS.
 
 ## Cấu trúc
 
 ```
-apps/api     NestJS — 2 entrypoint: src/main.ts (api) và src/worker.ts (worker)
-apps/web     React + Vite — giao diện tối thiểu để demo
-infra/       Dockerfile, Compose, Nginx, script triển khai/sao lưu, IAM policy
-.github/     CI (lint, test, coverage, gitleaks, docker build) và Deploy (GHCR → runner trên EC2 → blue/green → smoke → rollback)
-docs/        Tài liệu kiến trúc & quyết định kỹ thuật
+apps/api     API và worker xử lý tác vụ nền
+apps/web     Giao diện web
+infra/       Docker, Nginx và script triển khai
 ```
-
-## Luồng triển khai
-
-PR → CI xanh → merge `main` → build image `:<sha>` → GHCR (token tạm của job) → self-hosted runner trên EC2 chạy `deploy.sh <sha>` (không có access key AWS nào)
-→ migration → bật màu rảnh (blue/green) → health check → chuyển Nginx → smoke test qua HTTPS → hỏng thì `rollback.sh`.
-Chi tiết: [docs/05-deployment-cicd.md](docs/05-deployment-cicd.md).

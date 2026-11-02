@@ -12,3 +12,9 @@ infra.tar.gz
 .worker-heartbeat
 .playwright-mcp/
 apps/api/test/ai-eval/result-*.json
+
+# Development documents stay on developers' machines (not published)
+docs/
+srs.md
+CLAUDE.md
+infra/aws/README.md
