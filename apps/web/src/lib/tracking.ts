@@ -11,6 +11,7 @@ export const TrackingEvents = {
 
 export interface OrderStatusEvent {
   orderId: string;
+  code: string;
   status: OrderStatus;
   changedAt: string;
   version: number;

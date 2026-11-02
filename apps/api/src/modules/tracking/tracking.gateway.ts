@@ -9,13 +9,16 @@ import {
   WebSocketGateway,
 } from '@nestjs/websockets';
 import { DefaultEventsMap, Namespace, Socket } from 'socket.io';
+import { isStaff } from '../../common/auth/role.enum';
 import { OrderTrackingPublisher } from './order-tracking.publisher';
 import {
   OrderStatusEvent,
   orderRoom,
+  STAFF_ROOM,
   SubscribeAck,
   TRACKING_NAMESPACE,
   TrackingEvents,
+  userRoom,
 } from './tracking.events';
 import { HandshakeRejected, SocketSession, TrackingService } from './tracking.service';
 
@@ -71,7 +74,11 @@ export class TrackingGateway
     });
   }
 
-  handleConnection(socket: TrackingSocket): void {
+  async handleConnection(socket: TrackingSocket): Promise<void> {
+    // List screens ("my orders", warehouse queue) need no per-order subscription: the identity
+    // was verified at the handshake, so these rooms only ever carry what the user may see.
+    const { user } = socket.data.session;
+    await socket.join(isStaff(user.role) ? [userRoom(user.id), STAFF_ROOM] : userRoom(user.id));
     // The token was valid at the handshake only: close the socket when it expires, the client
     // renews its token and reconnects (and re-subscribes) on its own.
     const ttl = socket.data.session.expiresAt - Date.now();
@@ -94,9 +101,8 @@ export class TrackingGateway
     if (!orderId) return { ok: false, error: 'BAD_REQUEST' };
     const room = orderRoom(orderId);
     if (socket.rooms.has(room)) return { ok: true };
-    // rooms always contains the socket's own id.
-    if (socket.rooms.size > MAX_SUBSCRIPTIONS)
-      return { ok: false, error: 'TOO_MANY_SUBSCRIPTIONS' };
+    const followed = [...socket.rooms].filter((name) => name.startsWith('order:')).length;
+    if (followed >= MAX_SUBSCRIPTIONS) return { ok: false, error: 'TOO_MANY_SUBSCRIPTIONS' };
 
     try {
       if (!(await this.tracking.canWatch(socket.data.session.user, orderId))) {
@@ -120,11 +126,14 @@ export class TrackingGateway
     return { ok: true };
   }
 
-  orderStatusChanged(event: OrderStatusEvent): void {
+  orderStatusChanged(event: OrderStatusEvent, ownerId: string): void {
     // Undefined in processes without a WebSocket server (worker, unit tests).
     if (!this.namespace) return;
     try {
-      this.namespace.to(orderRoom(event.orderId)).emit(TrackingEvents.status, event);
+      // One emit over several rooms: a socket in more than one of them still gets it once.
+      this.namespace
+        .to([orderRoom(event.orderId), userRoom(ownerId), STAFF_ROOM])
+        .emit(TrackingEvents.status, event);
     } catch (error) {
       this.logger.warn({ err: error, orderId: event.orderId }, 'Realtime emit failed');
     }

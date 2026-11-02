@@ -139,7 +139,8 @@ export class OrdersService {
     }
 
     await this.productCache.stockChanged(productIds);
-    return { order: await this.detailOrThrow(orderId), replayed: false };
+    // New order: the warehouse queue and the customer's other tabs show it without a reload.
+    return { order: await this.afterStatusChange(orderId), replayed: false };
   }
 
   /** Simulated payment gateway: records the payment and moves the order to PAID. */
@@ -263,12 +264,16 @@ export class OrdersService {
    */
   private async afterStatusChange(orderId: string): Promise<OrderDetail> {
     const order = await this.detailOrThrow(orderId);
-    this.tracking.orderStatusChanged({
-      orderId: order.id,
-      status: order.status,
-      changedAt: order.updatedAt.toISOString(),
-      version: order.version,
-    });
+    this.tracking.orderStatusChanged(
+      {
+        orderId: order.id,
+        code: order.code,
+        status: order.status,
+        changedAt: order.updatedAt.toISOString(),
+        version: order.version,
+      },
+      order.customer.id,
+    );
     return order;
   }
 

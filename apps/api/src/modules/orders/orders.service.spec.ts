@@ -35,6 +35,7 @@ const head = (overrides: Partial<OrderHead> = {}): OrderHead => ({
 function setup() {
   const detail = {
     id: 'o1',
+    code: 'SF-TEST0001',
     customer: { id: 'u1' },
     status: OrderStatus.PAID,
     version: 2,
@@ -270,12 +271,16 @@ describe('OrdersService status changes', () => {
 
     await service.pay(customer, 'o1');
 
-    expect(tracking.orderStatusChanged).toHaveBeenCalledWith({
-      orderId: 'o1',
-      status: OrderStatus.PAID,
-      changedAt: '2026-11-02T03:00:00.000Z',
-      version: 2,
-    });
+    expect(tracking.orderStatusChanged).toHaveBeenCalledWith(
+      {
+        orderId: 'o1',
+        code: 'SF-TEST0001',
+        status: OrderStatus.PAID,
+        changedAt: '2026-11-02T03:00:00.000Z',
+        version: 2,
+      },
+      'u1', // the owner's other screens (order list) get it too
+    );
   });
 
   it('refuses to pay an order that is not pending', async () => {
