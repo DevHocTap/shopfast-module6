@@ -1,4 +1,11 @@
-import { forwardRef, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, useId } from 'react';
+import {
+  forwardRef,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+  useId,
+} from 'react';
 
 const CONTROL =
   'min-h-11 w-full rounded-sm border border-border bg-surface px-3 text-ink placeholder:text-muted transition-colors duration-150 hover:border-muted focus:border-brand-600 disabled:bg-canvas aria-[invalid=true]:border-danger-700';
@@ -79,3 +86,29 @@ export function SelectField({ label, options, id, className = '', ...rest }: Sel
     </FieldShell>
   );
 }
+
+interface TextareaFieldProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label: string;
+  hint?: string;
+  error?: string;
+}
+
+export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>(
+  function TextareaField({ label, hint, error, id, className = '', rows = 4, ...rest }, ref) {
+    const generated = useId();
+    const inputId = id ?? generated;
+    return (
+      <FieldShell id={inputId} label={label} hint={hint} error={error}>
+        <textarea
+          ref={ref}
+          id={inputId}
+          rows={rows}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error || hint ? `${inputId}-message` : undefined}
+          className={`${CONTROL} resize-y py-2 ${className}`}
+          {...rest}
+        />
+      </FieldShell>
+    );
+  },
+);

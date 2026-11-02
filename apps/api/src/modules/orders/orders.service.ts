@@ -191,6 +191,12 @@ export class OrdersService {
     return this.afterStatusChange(orderId);
   }
 
+  /** Staff-side lookup by the human-readable code (support assistant). */
+  async findByCode(code: string): Promise<OrderDetail | null> {
+    const id = await this.orders.findIdByCode(code);
+    return id ? this.orders.detail(id) : null;
+  }
+
   async getForUser(user: AuthUser, orderId: string): Promise<OrderDetail> {
     const order = await this.detailOrThrow(orderId);
     // Another customer's order answers 404, not 403: existence is not revealed.

@@ -54,6 +54,17 @@ export function jobsFor(event: StoredEvent, paymentReminderDelayMs: number): Pla
         jobId: jobId('inventory-sync', productId, event.id),
       }));
     }
+    case 'TicketCreated': {
+      const ticketId = String(event.payload.ticketId);
+      return [
+        {
+          queue: QUEUES.ai,
+          name: 'classify-ticket',
+          data: { ticketId },
+          jobId: jobId('ai-classify', ticketId),
+        },
+      ];
+    }
     default:
       return [];
   }

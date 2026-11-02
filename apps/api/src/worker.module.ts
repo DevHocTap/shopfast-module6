@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppConfigModule } from './infra/config/config.module';
 import { DatabaseModule } from './infra/database/database.module';
+import { LlmModule } from './infra/llm/llm.module';
 import { LoggerModule } from './infra/logger/logger.module';
 import { MailModule } from './infra/mail/mail.module';
 import { QueueModule } from './infra/queue/queue.module';
@@ -16,6 +17,7 @@ import { JobsModule } from './worker/jobs.module';
     DatabaseModule,
     RedisModule,
     MailModule,
+    LlmModule,
     QueueModule.forRoot({ failFast: false }),
     JobsModule,
   ],

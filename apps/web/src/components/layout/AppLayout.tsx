@@ -15,6 +15,8 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: 'Sản phẩm' },
   { to: '/orders', label: 'Đơn hàng của tôi', requiresAuth: true },
+  { to: '/support', label: 'Hỗ trợ', roles: ['CUSTOMER'] },
+  { to: '/desk', label: 'CSKH', roles: ['SUPPORT', 'ADMIN'] },
   { to: '/warehouse', label: 'Kho', roles: ['WAREHOUSE', 'ADMIN'] },
   { to: '/jobs', label: 'Tác vụ nền', roles: ['ADMIN'] },
   { to: '/status', label: 'Hệ thống', roles: ['ADMIN'] },

@@ -54,6 +54,11 @@ export const envSchema = z.object({
   /** Share of calls the simulated warehouse partner fails, to demonstrate retries and dead letters. */
   PARTNER_FAILURE_RATE: z.coerce.number().min(0).max(1).default(0.2),
 
+  /** AI assistant (F01). Without a key the assistant is reported as paused; tickets stay UNCLASSIFIED. */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  LLM_MODEL: z.string().default('claude-opus-5-5'),
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+
   /** Off only for load tests that measure raw throughput. */
   RATE_LIMIT_ENABLED: booleanString.default('true'),
 

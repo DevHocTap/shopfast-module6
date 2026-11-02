@@ -8,7 +8,8 @@ export type OutboxEvent =
       type: 'InventoryChanged';
       aggregateId: string;
       payload: { productIds: string[]; reason: string };
-    };
+    }
+  | { type: 'TicketCreated'; aggregateId: string; payload: { ticketId: string } };
 
 /**
  * Transactional outbox: events are inserted with the business change, in the SAME transaction.

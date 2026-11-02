@@ -17,6 +17,7 @@ const QUEUE_LABEL: Record<QueueName, { title: string; description: string }> = {
   'inventory-sync': { title: 'Đồng bộ tồn kho', description: 'Đẩy tồn kho sang đối tác' },
   'payment-reminder': { title: 'Nhắc thanh toán', description: 'Gửi sau 30 phút nếu chưa trả' },
   report: { title: 'Báo cáo doanh thu', description: 'Chạy lúc 00:05 mỗi ngày' },
+  ai: { title: 'Phân loại ticket (AI)', description: 'Xếp ticket mới vào nhóm CSKH' },
 };
 
 const queueTitle = (name: string) => QUEUE_LABEL[name as QueueName]?.title ?? name;
