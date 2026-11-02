@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
 
 /*
  * Design tokens — the ONLY place colors, radii and shadows are defined.
@@ -6,12 +7,16 @@
  * Contrast: text on surface ≥ 4.5:1 (WCAG AA).
  */
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-sans:
+    'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
 
   /* One accent color */
-  --color-brand-50: #eef2ff;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-600: #2563eb; /* 5.2:1 on white */
+  --color-brand-700: #1d4ed8;
+  --color-brand-900: #1e3a8a; /* dark brand surfaces (hero, auth panel) */
 
   /* Neutral scale */
   --color-surface: #ffffff;
@@ -28,10 +33,11 @@
   --color-danger-50: #fef2f2;
   --color-danger-700: #b91c1c;
 
-  /* Two radii, one shadow */
+  /* Two radii, two shadows (resting card, hovered card) */
   --radius-sm: 6px;
   --radius-lg: 12px;
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.04);
+  --shadow-raised: 0 4px 8px rgb(15 23 42 / 0.06), 0 12px 24px rgb(15 23 42 / 0.08);
 }
 
 @layer base {
@@ -46,5 +52,13 @@
 
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-600;
+  }
+}
+
+/* Horizontally swipeable rows (chips, tabs): the row still scrolls, without a visible bar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }

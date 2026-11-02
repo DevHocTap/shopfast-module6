@@ -2,6 +2,7 @@ import { ArrowLeft, PackageX } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ProductTile, StockBadgeText } from '../../components/ProductTile';
+import { VALUE_PROPS } from '../../components/ValueProps';
 import { Button, ButtonLink } from '../../components/ui/Button';
 import { QuantityStepper } from '../../components/ui/QuantityStepper';
 import { Card, EmptyState, ErrorState, Skeleton } from '../../components/ui/States';
@@ -33,7 +34,7 @@ export function ProductDetailPage() {
       <>
         {back}
         <div className="grid gap-8 md:grid-cols-2" aria-busy="true">
-          <Skeleton className="aspect-square w-full" />
+          <Skeleton className="aspect-square w-full rounded-lg" />
           <div className="flex flex-col gap-4">
             <Skeleton className="h-4 w-1/3" />
             <Skeleton className="h-8 w-3/4" />
@@ -70,14 +71,22 @@ export function ProductDetailPage() {
   return (
     <>
       {back}
-      <div className="grid gap-8 md:grid-cols-2">
-        <ProductTile brand={product.brand.name} className="aspect-square w-full" />
+      <div className="grid gap-8 md:grid-cols-2 lg:gap-12">
+        <ProductTile
+          category={product.category.name}
+          brand={product.brand.name}
+          size="lg"
+          className="aspect-square w-full rounded-lg"
+        />
         <div>
-          <p className="text-sm text-muted">
-            {product.brand.name} · {product.category.name} · {product.sku}
+          <p className="text-sm font-medium uppercase tracking-wider text-brand-700">
+            {product.brand.name}
           </p>
           <h1 className="mt-2 text-2xl font-semibold">{product.name}</h1>
-          <p className="mt-4 text-2xl font-semibold text-brand-700">{formatVND(product.price)}</p>
+          <p className="mt-2 text-sm text-muted">
+            {product.category.name} · Mã {product.sku}
+          </p>
+          <p className="mt-6 text-2xl font-semibold tabular-nums">{formatVND(product.price)}</p>
           <div className="mt-2">
             <StockBadgeText stock={product.stock} />
             {product.stock > 0 && (
@@ -117,6 +126,18 @@ export function ProductDetailPage() {
               <p className="text-muted">Sản phẩm tạm hết hàng. Vui lòng quay lại sau.</p>
             )}
           </Card>
+
+          <ul className="mt-8 flex flex-col gap-4">
+            {VALUE_PROPS.map(({ icon: Icon, title, text }) => (
+              <li key={title} className="flex items-start gap-3">
+                <Icon className="mt-px size-5 shrink-0 text-brand-600" aria-hidden />
+                <p className="text-sm">
+                  <span className="font-medium">{title}.</span>{' '}
+                  <span className="text-muted">{text}</span>
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </>

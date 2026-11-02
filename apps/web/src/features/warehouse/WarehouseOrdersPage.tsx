@@ -96,7 +96,7 @@ export function WarehouseOrdersPage() {
       <WarehouseSubnav />
 
       <div
-        className="mb-6 flex gap-2 overflow-x-auto pb-1"
+        className="no-scrollbar mb-6 flex gap-2 overflow-x-auto pb-1"
         role="tablist"
         aria-label="Lọc theo trạng thái"
       >

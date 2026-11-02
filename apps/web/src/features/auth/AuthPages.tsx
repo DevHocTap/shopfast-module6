@@ -2,7 +2,9 @@ import { FormEvent, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { InputField } from '../../components/ui/Field';
-import { Card, InlineAlert } from '../../components/ui/States';
+import { Logo } from '../../components/Logo';
+import { ValueProps } from '../../components/ValueProps';
+import { InlineAlert } from '../../components/ui/States';
 import { ApiError, errorMessage } from '../../lib/api-client';
 import { useAuth } from '../../lib/auth';
 import type { User } from '../../lib/types';
@@ -21,10 +23,23 @@ function AuthCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto w-full max-w-sm">
-      <h1 className="text-2xl font-semibold">{title}</h1>
-      <p className="mt-2 text-muted">{subtitle}</p>
-      <Card className="mt-8 p-6">{children}</Card>
+    <div className="mx-auto grid w-full max-w-sm overflow-hidden rounded-lg bg-surface shadow-card lg:max-w-4xl lg:grid-cols-2">
+      <div className="hidden flex-col gap-12 bg-brand-900 p-12 lg:flex">
+        <Logo inverted />
+        <div className="mt-auto">
+          <p className="text-2xl font-semibold text-white">
+            Thiết bị chính hãng, theo dõi đơn hàng từng bước.
+          </p>
+          <div className="mt-8">
+            <ValueProps tone="dark" stacked />
+          </div>
+        </div>
+      </div>
+      <div className="p-6 sm:p-12">
+        <h1 className="text-2xl font-semibold">{title}</h1>
+        <p className="mt-2 text-muted">{subtitle}</p>
+        <div className="mt-8">{children}</div>
+      </div>
     </div>
   );
 }

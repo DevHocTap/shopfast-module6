@@ -60,19 +60,25 @@ export function OrdersPage() {
                 <li key={order.id}>
                   <Link
                     to={`/orders/${order.id}`}
-                    className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 transition-colors duration-150 hover:bg-canvas sm:p-6"
+                    className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 p-4 transition-colors duration-150 hover:bg-canvas sm:grid-cols-[1fr_auto_8rem_auto] sm:gap-x-6 sm:p-6"
                   >
-                    <div className="min-w-0 flex-1 basis-40">
+                    <div className="min-w-0">
                       <p className="font-mono font-medium">{order.code}</p>
                       <p className="mt-1 text-sm text-muted">
                         {formatDateTime(order.createdAt)} · {order.itemCount} sản phẩm
                       </p>
                     </div>
-                    <OrderStatusBadge status={order.status} />
-                    <span className="w-32 text-right font-semibold tabular-nums">
+                    {/* Phones: code + total on top, status below; wider screens: one row. */}
+                    <div className="row-start-2 sm:col-start-2 sm:row-start-1">
+                      <OrderStatusBadge status={order.status} />
+                    </div>
+                    <span className="col-start-2 row-start-1 text-right font-semibold tabular-nums sm:col-start-3">
                       {formatVND(order.total)}
                     </span>
-                    <ChevronRight className="size-4 text-muted" aria-hidden />
+                    <ChevronRight
+                      className="hidden size-4 text-muted sm:col-start-4 sm:row-start-1 sm:block"
+                      aria-hidden
+                    />
                   </Link>
                 </li>
               ))}

@@ -199,7 +199,7 @@ export function OrderDetailPage() {
           </dl>
           <p className="mt-4 text-sm text-muted">
             {order.payment
-              ? `Đã thanh toán lúc ${formatDateTime(order.payment.paidAt)} (giả lập).`
+              ? `Đã thanh toán lúc ${formatDateTime(order.payment.paidAt)}.`
               : 'Chưa thanh toán.'}
           </p>
           <InvoiceLink order={order} />
