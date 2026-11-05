@@ -49,12 +49,20 @@ export function ProductTile({
   const Icon = categoryIcon(category);
   return (
     <div
-      className={`flex flex-col items-center justify-center gap-3 bg-brand-50 text-brand-600 ${className}`}
+      className={`relative flex flex-col items-center justify-center gap-3 overflow-hidden bg-gradient-to-br from-brand-50 via-white to-brand-100 text-brand-600 ${className}`}
       aria-hidden
     >
-      <Icon className={size === 'lg' ? 'size-24' : 'size-12'} strokeWidth={1.5} />
+      <span className="absolute -right-8 -top-8 size-28 rounded-full bg-brand-100/70" />
+      <span className="absolute -bottom-10 -left-10 size-32 rounded-full border-[18px] border-brand-100/60" />
       <span
-        className={`max-w-full truncate px-4 font-semibold uppercase tracking-wider text-brand-700 ${
+        className={`relative flex items-center justify-center rounded-2xl bg-white/90 shadow-card ${
+          size === 'lg' ? 'size-32' : 'size-20'
+        }`}
+      >
+        <Icon className={size === 'lg' ? 'size-24' : 'size-10'} strokeWidth={1.5} />
+      </span>
+      <span
+        className={`relative max-w-full truncate px-4 font-bold uppercase tracking-[0.16em] text-brand-700 ${
           size === 'lg' ? 'text-base' : 'text-sm'
         }`}
       >
