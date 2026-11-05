@@ -8,8 +8,10 @@ const BASE =
   'inline-flex items-center justify-center gap-2 rounded-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60';
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-brand-600 text-white shadow-card hover:-translate-y-px hover:bg-brand-700 hover:shadow-raised',
-  secondary: 'border border-border bg-surface text-ink shadow-card hover:-translate-y-px hover:border-brand-100 hover:bg-brand-50',
+  primary:
+    'bg-brand-600 text-white shadow-card hover:-translate-y-px hover:bg-brand-700 hover:shadow-raised',
+  secondary:
+    'border border-border bg-surface text-ink shadow-card hover:-translate-y-px hover:border-brand-100 hover:bg-brand-50',
   /** Tinted, for repeated item-level actions that must not compete with the page's primary. */
   soft: 'bg-brand-50 text-brand-700 hover:bg-brand-100',
   ghost: 'text-ink hover:bg-brand-50',

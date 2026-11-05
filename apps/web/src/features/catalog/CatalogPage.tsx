@@ -1,4 +1,11 @@
-import { ArrowRight, LayoutGrid, PackageSearch, ShoppingCart, SlidersHorizontal, Sparkles } from 'lucide-react';
+import {
+  ArrowRight,
+  LayoutGrid,
+  PackageSearch,
+  ShoppingCart,
+  SlidersHorizontal,
+  Sparkles,
+} from 'lucide-react';
 import { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { categoryIcon, ProductTile, StockBadge } from '../../components/ProductTile';
@@ -334,7 +341,9 @@ function ProductCard({
           </div>
         </div>
         <div className="flex flex-1 flex-col p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-700">{product.category.name}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-700">
+            {product.category.name}
+          </p>
           <h2 className="mt-2 line-clamp-2 font-semibold leading-6 transition-colors duration-150 group-hover:text-brand-700">
             {product.name}
           </h2>

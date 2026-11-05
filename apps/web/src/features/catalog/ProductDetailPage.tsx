@@ -82,11 +82,15 @@ export function ProductDetailPage() {
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-700">
             {product.brand.name}
           </p>
-          <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight sm:text-4xl">{product.name}</h1>
+          <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+            {product.name}
+          </h1>
           <p className="mt-2 text-sm text-muted">
             {product.category.name} · Mã {product.sku}
           </p>
-          <p className="mt-7 text-3xl font-bold tracking-tight tabular-nums">{formatVND(product.price)}</p>
+          <p className="mt-7 text-3xl font-bold tracking-tight tabular-nums">
+            {formatVND(product.price)}
+          </p>
           <div className="mt-2">
             <StockBadgeText stock={product.stock} />
             {product.stock > 0 && (
