@@ -76,17 +76,21 @@ export function ProductDetailPage() {
           category={product.category.name}
           brand={product.brand.name}
           size="lg"
-          className="aspect-square w-full rounded-lg"
+          className="aspect-square w-full rounded-[2rem] shadow-card"
         />
-        <div>
-          <p className="text-sm font-medium uppercase tracking-wider text-brand-700">
+        <div className="pt-2">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-700">
             {product.brand.name}
           </p>
-          <h1 className="mt-2 text-2xl font-semibold">{product.name}</h1>
+          <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+            {product.name}
+          </h1>
           <p className="mt-2 text-sm text-muted">
             {product.category.name} · Mã {product.sku}
           </p>
-          <p className="mt-6 text-2xl font-semibold tabular-nums">{formatVND(product.price)}</p>
+          <p className="mt-7 text-3xl font-bold tracking-tight tabular-nums">
+            {formatVND(product.price)}
+          </p>
           <div className="mt-2">
             <StockBadgeText stock={product.stock} />
             {product.stock > 0 && (
@@ -95,7 +99,7 @@ export function ProductDetailPage() {
           </div>
           <p className="mt-6 max-w-prose text-muted">{product.description}</p>
 
-          <Card className="mt-8 p-6">
+          <Card className="mt-8 border border-white/80 p-6 shadow-raised">
             {product.inStock ? (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4">
@@ -127,14 +131,12 @@ export function ProductDetailPage() {
             )}
           </Card>
 
-          <ul className="mt-8 flex flex-col gap-4">
+          <ul className="mt-8 grid gap-4 sm:grid-cols-3">
             {VALUE_PROPS.map(({ icon: Icon, title, text }) => (
-              <li key={title} className="flex items-start gap-3">
-                <Icon className="mt-px size-5 shrink-0 text-brand-600" aria-hidden />
-                <p className="text-sm">
-                  <span className="font-medium">{title}.</span>{' '}
-                  <span className="text-muted">{text}</span>
-                </p>
+              <li key={title} className="rounded-xl border border-border bg-surface p-4">
+                <Icon className="size-5 text-brand-600" aria-hidden />
+                <p className="mt-3 text-sm font-semibold">{title}</p>
+                <p className="mt-1 text-sm leading-5 text-muted">{text}</p>
               </li>
             ))}
           </ul>

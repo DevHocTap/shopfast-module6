@@ -1,4 +1,11 @@
-import { LayoutGrid, PackageSearch, ShoppingCart, SlidersHorizontal } from 'lucide-react';
+import {
+  ArrowRight,
+  LayoutGrid,
+  PackageSearch,
+  ShoppingCart,
+  SlidersHorizontal,
+  Sparkles,
+} from 'lucide-react';
 import { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { categoryIcon, ProductTile, StockBadge } from '../../components/ProductTile';
@@ -123,19 +130,34 @@ export function CatalogPage() {
   return (
     <div className="flex flex-col gap-8">
       {showHero && (
-        <section className="rounded-lg bg-brand-900 px-6 py-8 text-white sm:px-12 sm:py-12">
-          <h1 className="max-w-3xl text-2xl font-semibold sm:text-4xl">
-            Thiết bị công nghệ chính hãng cho mỗi ngày
-          </h1>
-          <p className="mt-4 max-w-xl text-brand-100 sm:text-lg">
+        <section className="relative isolate overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-10 text-white shadow-raised sm:px-12 sm:py-16">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_10%,rgb(79_70_229_/_0.65),transparent_31rem),radial-gradient(circle_at_95%_100%,rgb(14_165_233_/_0.3),transparent_26rem)]" />
+          <div className="absolute -right-20 top-8 -z-10 size-72 rounded-full border border-white/10" />
+          <div className="absolute -right-4 top-24 -z-10 size-44 rounded-full border border-white/10" />
+          <div className="absolute bottom-0 left-[48%] -z-10 h-32 w-64 rotate-[-18deg] rounded-full bg-brand-600/30 blur-3xl" />
+          <div className="max-w-3xl">
+            <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-brand-100 backdrop-blur">
+              <Sparkles className="size-3.5" aria-hidden /> Shop công nghệ tuyển chọn
+            </p>
+            <h1 className="mt-6 max-w-2xl text-balance text-3xl font-bold tracking-tight sm:text-5xl">
+              Công nghệ tốt hơn cho nhịp sống mỗi ngày.
+            </h1>
+          </div>
+          <p className="mt-5 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
             {total === undefined
               ? 'Điện thoại, laptop, âm thanh và phụ kiện từ các thương hiệu hàng đầu.'
               : `${total.toLocaleString('vi-VN')} sản phẩm${
                   brands.length ? ` từ ${brands.length} thương hiệu` : ''
                 }: điện thoại, laptop, âm thanh và phụ kiện.`}
           </p>
+          <a
+            href="#catalog"
+            className="mt-8 inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-slate-950 shadow-lg transition-transform hover:-translate-y-px"
+          >
+            Khám phá sản phẩm <ArrowRight className="size-4" aria-hidden />
+          </a>
           {/* On phones the products matter more than the pitch. */}
-          <div className="mt-12 hidden sm:block">
+          <div className="mt-12 max-w-3xl border-t border-white/10 pt-7 sm:block">
             <ValueProps tone="dark" />
           </div>
         </section>
@@ -167,7 +189,7 @@ export function CatalogPage() {
         </ul>
       </nav>
 
-      <div className="grid gap-8 lg:grid-cols-[256px_1fr]">
+      <div id="catalog" className="scroll-mt-32 grid gap-8 lg:grid-cols-[256px_1fr]">
         <aside>
           <details className="group lg:hidden">
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-sm border border-border bg-surface px-4 font-medium">
@@ -176,7 +198,7 @@ export function CatalogPage() {
             </summary>
             <Card className="mt-3 p-4">{filterForm}</Card>
           </details>
-          <Card className="hidden p-6 lg:block">
+          <Card className="hidden border border-white/80 p-6 lg:block">
             <h2 className="mb-4 flex items-center gap-2 font-semibold">
               <SlidersHorizontal className="size-4 text-muted" aria-hidden />
               Bộ lọc
@@ -284,10 +306,10 @@ function CategoryChip({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-sm px-4 text-sm font-medium transition-colors duration-150 ${
+      className={`inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all duration-200 ${
         active
-          ? 'bg-brand-600 text-white'
-          : 'bg-surface text-ink shadow-card hover:bg-brand-50 hover:text-brand-700'
+          ? 'bg-brand-600 text-white shadow-card'
+          : 'border border-transparent bg-surface text-ink shadow-card hover:-translate-y-px hover:border-brand-100 hover:bg-brand-50 hover:text-brand-700'
       }`}
     >
       <Icon className="size-4" aria-hidden />
@@ -306,7 +328,7 @@ function ProductCard({
   onAdd: () => void;
 }) {
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-lg bg-surface shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-[1.25rem] border border-transparent bg-surface shadow-card transition duration-300 hover:-translate-y-1 hover:border-brand-100 hover:shadow-raised">
       <Link to={`/products/${product.id}`} className="flex flex-1 flex-col rounded-lg">
         <div className="relative">
           <ProductTile
@@ -318,12 +340,14 @@ function ProductCard({
             <StockBadge stock={product.stock} />
           </div>
         </div>
-        <div className="flex flex-1 flex-col p-4">
-          <p className="text-sm text-muted">{product.category.name}</p>
-          <h2 className="mt-1 line-clamp-2 font-medium transition-colors duration-150 group-hover:text-brand-700">
+        <div className="flex flex-1 flex-col p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-700">
+            {product.category.name}
+          </p>
+          <h2 className="mt-2 line-clamp-2 font-semibold leading-6 transition-colors duration-150 group-hover:text-brand-700">
             {product.name}
           </h2>
-          <p className="mt-auto pr-16 pt-4 text-lg font-semibold tabular-nums">
+          <p className="mt-auto pr-16 pt-5 text-xl font-bold tabular-nums">
             {formatVND(product.price)}
           </p>
         </div>

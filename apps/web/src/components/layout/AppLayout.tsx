@@ -1,4 +1,4 @@
-import { LogOut, ShoppingCart } from 'lucide-react';
+import { LogOut, ShoppingCart, Sparkles, Truck } from 'lucide-react';
 import { Link, NavLink, Outlet, ScrollRestoration, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useCart } from '../../lib/cart';
@@ -24,8 +24,10 @@ const NAV: NavItem[] = [
 ];
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `inline-flex min-h-11 shrink-0 items-center rounded-sm px-3 text-sm font-medium transition-colors duration-150 ${
-    isActive ? 'bg-brand-50 text-brand-700' : 'text-muted hover:bg-canvas hover:text-ink'
+  `inline-flex min-h-10 shrink-0 items-center rounded-full px-3 text-sm font-semibold transition-all duration-150 ${
+    isActive
+      ? 'bg-brand-50 text-brand-700 shadow-sm'
+      : 'text-muted hover:bg-brand-50 hover:text-brand-700'
   }`;
 
 export function AppLayout() {
@@ -45,8 +47,18 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-20 border-b border-border bg-surface">
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
+      <header className="sticky top-0 z-20 border-b border-border/80 bg-surface/90 backdrop-blur-xl">
+        <div className="hidden border-b border-white/10 bg-brand-900 text-brand-100 sm:block">
+          <div className="mx-auto flex h-9 max-w-6xl items-center justify-between px-4 text-xs font-medium">
+            <span className="inline-flex items-center gap-2">
+              <Truck className="size-3.5" aria-hidden /> Miễn phí vận chuyển cho mọi đơn hàng
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <Sparkles className="size-3.5" aria-hidden /> Công nghệ chọn lọc, dịch vụ tận tâm
+            </span>
+          </div>
+        </div>
+        <div className="mx-auto flex h-[4.5rem] max-w-6xl items-center gap-4 px-4">
           <NavLink to="/" className="mr-2 shrink-0 rounded-sm" aria-label="ShopFast — trang chủ">
             <Logo />
           </NavLink>
@@ -58,7 +70,7 @@ export function AppLayout() {
             {status === 'authenticated' && (
               <NavLink
                 to="/cart"
-                className="relative flex size-11 items-center justify-center rounded-sm text-ink hover:bg-canvas"
+                className="relative flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50"
                 aria-label={`Giỏ hàng, ${count} sản phẩm`}
               >
                 <ShoppingCart className="size-5" aria-hidden />
@@ -88,7 +100,7 @@ export function AppLayout() {
                     navigate('/', { replace: true });
                     void logout();
                   }}
-                  className="flex size-11 items-center justify-center rounded-sm text-muted hover:bg-canvas hover:text-ink"
+                  className="flex size-11 items-center justify-center rounded-full text-muted hover:bg-brand-50 hover:text-ink"
                   aria-label="Đăng xuất"
                   title="Đăng xuất"
                 >
@@ -105,7 +117,7 @@ export function AppLayout() {
           </div>
         </div>
         <nav
-          className="no-scrollbar flex gap-1 overflow-x-auto border-t border-border px-2 py-1 md:hidden"
+          className="no-scrollbar flex gap-1 overflow-x-auto border-t border-border px-2 py-1.5 md:hidden"
           aria-label="Điều hướng chính"
         >
           {links}
@@ -150,24 +162,24 @@ const FOOTER_LINKS = [
 
 function SiteFooter() {
   return (
-    <footer className="border-t border-border bg-surface">
+    <footer className="mt-8 bg-slate-950 text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr]">
         <div className="max-w-sm">
-          <Logo />
-          <p className="mt-4 text-sm text-muted">
+          <Logo inverted />
+          <p className="mt-4 text-sm leading-6 text-slate-400">
             Thiết bị công nghệ chính hãng: điện thoại, laptop, âm thanh, phụ kiện. Đặt hàng nhanh,
             theo dõi đơn ngay trên màn hình.
           </p>
         </div>
         {FOOTER_LINKS.map((group) => (
           <nav key={group.title} aria-label={group.title}>
-            <h2 className="text-sm font-semibold">{group.title}</h2>
+            <h2 className="text-sm font-semibold text-white">{group.title}</h2>
             <ul className="mt-2">
               {group.links.map((link) => (
                 <li key={link.to}>
                   <Link
                     to={link.to}
-                    className="inline-flex min-h-11 items-center text-sm text-muted transition-colors duration-150 hover:text-ink"
+                    className="inline-flex min-h-11 items-center text-sm text-slate-400 transition-colors duration-150 hover:text-white"
                   >
                     {link.label}
                   </Link>
@@ -177,8 +189,8 @@ function SiteFooter() {
           </nav>
         ))}
       </div>
-      <div className="border-t border-border">
-        <p className="mx-auto max-w-6xl px-4 py-6 text-sm text-muted">
+      <div className="border-t border-white/10">
+        <p className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-500">
           © {new Date().getFullYear()} ShopFast. Bảo lưu mọi quyền.
         </p>
       </div>
