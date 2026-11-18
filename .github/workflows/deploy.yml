@@ -8,11 +8,14 @@ name: Deploy
 #   rollback (self-hosted)    only when smoke fails
 #
 # No AWS credential exists in GitHub: AWS calls happen on the EC2 host with its instance role.
+#
+# PAUSED: the AWS server is shut down, so automatic deploy after CI is disabled (manual run only).
+# To re-enable, restore:
+#   workflow_run:
+#     workflows: [CI]
+#     types: [completed]
+#     branches: [main]
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       sha:
