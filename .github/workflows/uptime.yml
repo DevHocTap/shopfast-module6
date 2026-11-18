@@ -3,9 +3,12 @@ name: Uptime
 # External monitoring (F07): probes production from GitHub's network every 10 minutes, so it
 # notices outages the server itself cannot report (instance down, DNS, TLS, Nginx).
 # A failed run e-mails the repository owner (GitHub notifications for scheduled workflows).
+#
+# PAUSED: the AWS server is shut down, so the 10-minute schedule is disabled to stop failure e-mails.
+# To re-enable, restore:
+#   schedule:
+#     - cron: '*/10 * * * *'
 on:
-  schedule:
-    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 permissions: {}
